@@ -129,6 +129,7 @@ private:
     void browsePrivateKey();
     void reloadKeyringCombo();
     void importKeyIntoKeyring();
+    void generateKeyIntoKeyring();
     void renameSelectedStoredKey();
     void editSelectedStoredKeyPassphrase();
     void removeSelectedKeyringKey();
@@ -203,6 +204,7 @@ private:
     QLineEdit* m_keyPathEdit = nullptr;
     QComboBox* m_keyringCombo = nullptr;
     QPushButton* m_importKeyBtn = nullptr;
+    QPushButton* m_generateKeyBtn = nullptr;
     QPushButton* m_removeKeyBtn = nullptr;
     QPushButton* m_renameKeyBtn = nullptr;
     QPushButton* m_passphraseKeyBtn = nullptr;

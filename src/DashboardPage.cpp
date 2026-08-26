@@ -29,12 +29,15 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFontMetrics>
+#include <QFormLayout>
 #include <QInputDialog>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -761,15 +764,18 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     m_agentStatus = new QLabel(m_keysPage);
     m_agentStatus->setObjectName(QStringLiteral("dashHint"));
     m_importKeyBtn = new QPushButton(QStringLiteral("Import key…"), m_keysPage);
+    m_generateKeyBtn = new QPushButton(QStringLiteral("Generate key…"), m_keysPage);
     m_renameKeyBtn = new QPushButton(QStringLiteral("Rename"), m_keysPage);
     m_passphraseKeyBtn = new QPushButton(QStringLiteral("Passphrase…"), m_keysPage);
     m_removeKeyBtn = new QPushButton(QStringLiteral("Remove"), m_keysPage);
-    for (QPushButton* button : {m_importKeyBtn, m_renameKeyBtn, m_passphraseKeyBtn, m_removeKeyBtn}) {
+    for (QPushButton* button :
+         {m_importKeyBtn, m_generateKeyBtn, m_renameKeyBtn, m_passphraseKeyBtn, m_removeKeyBtn}) {
         button->setObjectName(QStringLiteral("dashButton"));
         button->setFocusPolicy(Qt::NoFocus);
     }
     keysToolbarLay->addWidget(m_agentStatus, 1);
     keysToolbarLay->addWidget(m_importKeyBtn);
+    keysToolbarLay->addWidget(m_generateKeyBtn);
     keysToolbarLay->addWidget(m_renameKeyBtn);
     keysToolbarLay->addWidget(m_passphraseKeyBtn);
     keysToolbarLay->addWidget(m_removeKeyBtn);
@@ -788,7 +794,9 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     m_keysTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     keysLay->addWidget(m_keysTable, 1);
 
-    m_keysEmpty = new QLabel(QStringLiteral("no stored SSH keys — import one to reuse it across hosts"), m_keysPage);
+    m_keysEmpty = new QLabel(
+        QStringLiteral("no stored SSH keys — generate or import one to reuse it across hosts"),
+        m_keysPage);
     m_keysEmpty->setObjectName(QStringLiteral("dashHint"));
     m_keysEmpty->setAlignment(Qt::AlignCenter);
     // Match the Hosts empty-state geometry by filling the table area.
@@ -2022,6 +2030,7 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     connect(connectBtn, &QPushButton::clicked, this, &DashboardPage::connectFromForm);
     connect(m_browseKeyBtn, &QPushButton::clicked, this, &DashboardPage::browsePrivateKey);
     connect(m_importKeyBtn, &QPushButton::clicked, this, &DashboardPage::importKeyIntoKeyring);
+    connect(m_generateKeyBtn, &QPushButton::clicked, this, &DashboardPage::generateKeyIntoKeyring);
     connect(m_renameKeyBtn, &QPushButton::clicked, this, &DashboardPage::renameSelectedStoredKey);
     connect(m_passphraseKeyBtn, &QPushButton::clicked,
             this, &DashboardPage::editSelectedStoredKeyPassphrase);
@@ -3315,6 +3324,254 @@ void DashboardPage::importKeyIntoKeyring()
         m_keysStatus->setText(QStringLiteral("key '%1' saved to the encrypted vault").arg(key.name));
     }
     appendLog(QStringLiteral("imported SSH key '%1'").arg(key.name));
+}
+
+void DashboardPage::generateKeyIntoKeyring()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("Generate SSH key"));
+    dlg.setModal(true);
+    auto* form = new QFormLayout(&dlg);
+    form->setContentsMargins(14, 14, 14, 14);
+    form->setSpacing(8);
+
+    auto* nameEdit = new QLineEdit(&dlg);
+    nameEdit->setText(QStringLiteral("id_ed25519"));
+    nameEdit->setPlaceholderText(QStringLiteral("memorable name"));
+
+    auto* typeCombo = new QComboBox(&dlg);
+    typeCombo->addItem(QStringLiteral("ED25519 (recommended)"),
+                       static_cast<int>(SSH_KEYTYPE_ED25519));
+    typeCombo->addItem(QStringLiteral("RSA"), static_cast<int>(SSH_KEYTYPE_RSA));
+    typeCombo->addItem(QStringLiteral("ECDSA P-256"), static_cast<int>(SSH_KEYTYPE_ECDSA_P256));
+    typeCombo->addItem(QStringLiteral("ECDSA P-384"), static_cast<int>(SSH_KEYTYPE_ECDSA_P384));
+    typeCombo->addItem(QStringLiteral("ECDSA P-521"), static_cast<int>(SSH_KEYTYPE_ECDSA_P521));
+
+    auto* bitsCombo = new QComboBox(&dlg);
+    bitsCombo->addItem(QStringLiteral("2048"), 2048);
+    bitsCombo->addItem(QStringLiteral("3072"), 3072);
+    bitsCombo->addItem(QStringLiteral("4096"), 4096);
+    bitsCombo->setCurrentIndex(2); // 4096 default when RSA is chosen
+
+    auto* passEdit = new QLineEdit(&dlg);
+    passEdit->setEchoMode(QLineEdit::Password);
+    passEdit->setPlaceholderText(QStringLiteral("optional"));
+    auto* passConfirm = new QLineEdit(&dlg);
+    passConfirm->setEchoMode(QLineEdit::Password);
+    passConfirm->setPlaceholderText(QStringLiteral("repeat if set"));
+
+    auto* rememberPass = new QCheckBox(
+        QStringLiteral("Save passphrase in the encrypted vault"), &dlg);
+    rememberPass->setChecked(false);
+    rememberPass->setEnabled(false);
+
+    auto syncBitsEnabled = [typeCombo, bitsCombo, nameEdit]() {
+        const auto type = static_cast<enum ssh_keytypes_e>(typeCombo->currentData().toInt());
+        const bool rsa = (type == SSH_KEYTYPE_RSA);
+        bitsCombo->setEnabled(rsa);
+        if (nameEdit->text().trimmed().isEmpty()
+            || nameEdit->text().startsWith(QLatin1String("id_"))) {
+            switch (type) {
+            case SSH_KEYTYPE_RSA:
+                nameEdit->setText(QStringLiteral("id_rsa"));
+                break;
+            case SSH_KEYTYPE_ECDSA_P256:
+            case SSH_KEYTYPE_ECDSA_P384:
+            case SSH_KEYTYPE_ECDSA_P521:
+                nameEdit->setText(QStringLiteral("id_ecdsa"));
+                break;
+            default:
+                nameEdit->setText(QStringLiteral("id_ed25519"));
+                break;
+            }
+        }
+    };
+    connect(typeCombo, &QComboBox::currentIndexChanged, &dlg, syncBitsEnabled);
+    syncBitsEnabled();
+
+    connect(passEdit, &QLineEdit::textChanged, &dlg, [passEdit, rememberPass](const QString& text) {
+        const bool hasPass = !text.isEmpty();
+        rememberPass->setEnabled(hasPass);
+        if (!hasPass) {
+            rememberPass->setChecked(false);
+        } else if (!rememberPass->isChecked()) {
+            rememberPass->setChecked(true);
+        }
+    });
+
+    form->addRow(QStringLiteral("Name"), nameEdit);
+    form->addRow(QStringLiteral("Type"), typeCombo);
+    form->addRow(QStringLiteral("RSA bits"), bitsCombo);
+    form->addRow(QStringLiteral("Passphrase"), passEdit);
+    form->addRow(QStringLiteral("Confirm"), passConfirm);
+    form->addRow(QString(), rememberPass);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("Generate"));
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const QString displayName = nameEdit->text().trimmed().isEmpty()
+        ? QStringLiteral("generated-key")
+        : nameEdit->text().trimmed();
+    const auto keyType = static_cast<enum ssh_keytypes_e>(typeCombo->currentData().toInt());
+    const int rsaBits = bitsCombo->currentData().toInt();
+    QString passphrase = passEdit->text();
+    QString passphrase2 = passConfirm->text();
+    const bool savePassphrase = rememberPass->isChecked() && !passphrase.isEmpty();
+
+    if (passphrase != passphrase2) {
+        passphrase.fill(QChar(u'\0'));
+        passphrase2.fill(QChar(u'\0'));
+        m_keysStatus->setText(QStringLiteral("passphrases do not match"));
+        return;
+    }
+    passphrase2.fill(QChar(u'\0'));
+
+    int parameter = 0;
+    switch (keyType) {
+    case SSH_KEYTYPE_RSA:
+        parameter = rsaBits > 0 ? rsaBits : 4096;
+        break;
+    case SSH_KEYTYPE_ECDSA_P256:
+        parameter = 256;
+        break;
+    case SSH_KEYTYPE_ECDSA_P384:
+        parameter = 384;
+        break;
+    case SSH_KEYTYPE_ECDSA_P521:
+        parameter = 521;
+        break;
+    default:
+        parameter = 0;
+        break;
+    }
+
+    // ECDSA typed as P256/P384/P521: libssh's ssh_pki_generate expects
+    // SSH_KEYTYPE_ECDSA + curve bits for older APIs; newer types take 0.
+    enum ssh_keytypes_e generateType = keyType;
+    if (keyType == SSH_KEYTYPE_ECDSA_P256 || keyType == SSH_KEYTYPE_ECDSA_P384
+        || keyType == SSH_KEYTYPE_ECDSA_P521) {
+        generateType = SSH_KEYTYPE_ECDSA;
+    }
+
+    ssh_key generated = nullptr;
+    const int genRc = ssh_pki_generate(generateType, parameter, &generated);
+    if (genRc != SSH_OK || !generated) {
+        passphrase.fill(QChar(u'\0'));
+        m_keysStatus->setText(QStringLiteral("failed to generate key (libssh error %1)").arg(genRc));
+        return;
+    }
+
+    QByteArray passphraseUtf8 = passphrase.toUtf8();
+    passphrase.fill(QChar(u'\0'));
+    const char* passPtr = passphraseUtf8.isEmpty() ? nullptr : passphraseUtf8.constData();
+
+    char* pemOut = nullptr;
+    const int exportRc =
+        ssh_pki_export_privkey_base64(generated, passPtr, nullptr, nullptr, &pemOut);
+    if (exportRc != SSH_OK || !pemOut) {
+        ssh_key_free(generated);
+        wipeBytes(passphraseUtf8);
+        m_keysStatus->setText(QStringLiteral("failed to export generated private key"));
+        return;
+    }
+
+    QByteArray pem = QByteArray(pemOut);
+    ssh_string_free_char(pemOut);
+    pemOut = nullptr;
+
+    QString publicKeyLine;
+    char* pubOut = nullptr;
+    if (ssh_pki_export_pubkey_base64(generated, &pubOut) == SSH_OK && pubOut) {
+        const char* typeLabel = ssh_key_type_to_char(ssh_key_type(generated));
+        publicKeyLine = QStringLiteral("%1 %2 %3")
+                            .arg(typeLabel ? QString::fromLatin1(typeLabel) : QStringLiteral("ssh-key"),
+                                 QString::fromLatin1(pubOut),
+                                 displayName);
+        ssh_string_free_char(pubOut);
+    }
+
+    StoredKey key;
+    key.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    key.name = displayName;
+    {
+        const char* parsedType = ssh_key_type_to_char(ssh_key_type(generated));
+        key.type = parsedType ? QString::fromLatin1(parsedType) : QStringLiteral("unknown");
+    }
+    unsigned char* hash = nullptr;
+    size_t hashLen = 0;
+    if (ssh_get_publickey_hash(generated, SSH_PUBLICKEY_HASH_SHA256, &hash, &hashLen) == SSH_OK) {
+        char* fingerprint = ssh_get_fingerprint_hash(SSH_PUBLICKEY_HASH_SHA256, hash, hashLen);
+        if (fingerprint) {
+            key.fingerprint = QString::fromLatin1(fingerprint);
+            ssh_string_free_char(fingerprint);
+        }
+        ssh_clean_pubkey_hash(&hash);
+    }
+    key.pem = pem;
+    key.hasPassphrase = !passphraseUtf8.isEmpty();
+    ssh_key_free(generated);
+    generated = nullptr;
+
+    VaultManager vault;
+    const bool stored = vault.storeStoredKey(key);
+    wipeBytes(key.pem);
+    wipeBytes(pem);
+    if (!stored) {
+        wipeBytes(passphraseUtf8);
+        m_keysStatus->setText(QStringLiteral("failed to store key in the encrypted vault"));
+        return;
+    }
+
+    bool passphraseStoreFailed = false;
+    if (key.hasPassphrase && savePassphrase) {
+        if (!vault.storeStoredKeyPassphrase(key.id, passphraseUtf8)) {
+            passphraseStoreFailed = true;
+            m_keysStatus->setText(QStringLiteral("key generated, but its passphrase could not be saved"));
+        }
+    }
+    wipeBytes(passphraseUtf8);
+
+    reloadKeyringCombo();
+    const int idx = m_keyringCombo->findData(key.id);
+    if (idx >= 0) {
+        m_keyringCombo->setCurrentIndex(idx);
+    }
+    if (m_authMethodCombo) {
+        const int authIdx = m_authMethodCombo->findData(static_cast<int>(AuthMethod::StoredKey));
+        if (authIdx >= 0) {
+            m_authMethodCombo->setCurrentIndex(authIdx);
+        }
+        updateAuthMethodUi();
+    }
+    onKeyringSelectionChanged(m_keyringCombo->currentIndex());
+    rebuildKeychainList();
+    if (!passphraseStoreFailed) {
+        m_keysStatus->setText(QStringLiteral("key '%1' generated and saved").arg(key.name));
+    }
+    appendLog(QStringLiteral("generated SSH key '%1' (%2)").arg(key.name, key.type));
+
+    if (!publicKeyLine.isEmpty()) {
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Information);
+        box.setWindowTitle(QStringLiteral("Public key"));
+        box.setText(QStringLiteral("Key '%1' is ready. Copy the public key to authorized_keys:")
+                        .arg(key.name));
+        box.setDetailedText(publicKeyLine);
+        box.setStandardButtons(QMessageBox::Ok);
+        auto* copyBtn = box.addButton(QStringLiteral("Copy public key"), QMessageBox::ActionRole);
+        box.exec();
+        if (box.clickedButton() == copyBtn) {
+            QApplication::clipboard()->setText(publicKeyLine);
+            m_keysStatus->setText(QStringLiteral("public key copied to clipboard"));
+        }
+    }
 }
 
 void DashboardPage::renameSelectedStoredKey()
