@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "updated": "@TODAY@",
+  "addons": [
+    {
+      "id": "ai-agent",
+      "name": "AI agent",
+      "description": "OpenAI-compatible assistant beside the terminal. Adds Settings > AI agent, a robot toggle next to always-on-top, and a confirmable command panel. Loads only while installed and enabled.",
+      "version": "@VERSION@",
+      "author": "clientosh",
+      "homepage": "https://github.com/hdmain/clientosh",
+      "artifacts": [
+        {
+          "abi": "@ABI@",
+          "url": "@PLUGIN_URL@",
+          "sha256": "@PLUGIN_SHA256@",
+          "size": @PLUGIN_SIZE@
+        }
+      ]
+    }
+  ]
+}

@@ -7,12 +7,14 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QCoreApplication>
 #include <QStandardPaths>
 #include <QUrl>
 
@@ -38,6 +40,11 @@ QString AddonStore::addonsRoot()
 QString AddonStore::addonDir(const QString& addonId)
 {
     return addonsRoot() + QLatin1Char('/') + addonId;
+}
+
+QString AddonStore::bundledAddonsRoot()
+{
+    return QCoreApplication::applicationDirPath() + QStringLiteral("/addons-bundle");
 }
 
 QVector<AddonInstallRecord> AddonStore::installed() const
@@ -199,6 +206,34 @@ QString AddonStore::guessPluginFileName(const QUrl& url)
     return name;
 }
 
+void AddonStore::mergeBundledCatalog()
+{
+    const QString path = bundledAddonsRoot() + QStringLiteral("/index.json");
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) {
+        return;
+    }
+    AddonCatalog bundled;
+    QString err;
+    if (!parseCatalog(f.readAll(), &bundled, &err)) {
+        return;
+    }
+
+    // Bundled entries win on id collision so the first-party AI agent always shows up.
+    QHash<QString, int> byId;
+    for (int i = 0; i < m_catalog.addons.size(); ++i) {
+        byId.insert(m_catalog.addons.at(i).id, i);
+    }
+    for (const AddonCatalogEntry& e : bundled.addons) {
+        if (byId.contains(e.id)) {
+            m_catalog.addons[byId.value(e.id)] = e;
+        } else {
+            m_catalog.addons.push_back(e);
+        }
+    }
+    m_hasCatalog = true;
+}
+
 void AddonStore::refreshCatalog()
 {
     if (m_busy) {
@@ -206,7 +241,16 @@ void AddonStore::refreshCatalog()
     }
     const QUrl url(AddonConfig::repositoryUrl());
     if (!url.isValid() || url.scheme().isEmpty()) {
-        emit errorOccurred(QStringLiteral("Addon repository URL is invalid."));
+        // Still expose the on-disk bundled catalog (AI agent, etc.).
+        m_catalog = AddonCatalog{};
+        mergeBundledCatalog();
+        if (m_hasCatalog) {
+            emit catalogUpdated();
+            emit statusMessage(QStringLiteral("Using bundled addon catalog (%1 addons).")
+                                   .arg(m_catalog.addons.size()));
+        } else {
+            emit errorOccurred(QStringLiteral("Addon repository URL is invalid."));
+        }
         return;
     }
 
@@ -226,27 +270,107 @@ void AddonStore::refreshCatalog()
 
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const QByteArray body = reply->readAll();
-        if (reply->error() != QNetworkReply::NoError || status < 200 || status >= 300) {
+        const bool httpOk = (status == 0 && reply->error() == QNetworkReply::NoError)
+            || (status >= 200 && status < 300);
+        if (reply->error() != QNetworkReply::NoError || !httpOk) {
             QString err = reply->errorString();
             if (status > 0) {
                 err += QStringLiteral(" (HTTP %1)").arg(status);
             }
-            emit errorOccurred(QStringLiteral("Could not fetch catalog: %1").arg(err));
+            // Fall back to bundled packages so AI agent remains installable offline.
+            m_catalog = AddonCatalog{};
+            mergeBundledCatalog();
+            if (m_hasCatalog) {
+                emit catalogUpdated();
+                emit statusMessage(
+                    QStringLiteral("Remote catalog unavailable (%1); using bundled addons.")
+                        .arg(err));
+            } else {
+                emit errorOccurred(QStringLiteral("Could not fetch catalog: %1").arg(err));
+            }
             return;
         }
 
         AddonCatalog cat;
         QString parseErr;
         if (!parseCatalog(body, &cat, &parseErr)) {
-            emit errorOccurred(parseErr);
+            m_catalog = AddonCatalog{};
+            mergeBundledCatalog();
+            if (m_hasCatalog) {
+                emit catalogUpdated();
+                emit statusMessage(QStringLiteral("Remote catalog invalid; using bundled addons."));
+            } else {
+                emit errorOccurred(parseErr);
+            }
             return;
         }
         m_catalog = cat;
         m_hasCatalog = true;
+        mergeBundledCatalog();
         emit catalogUpdated();
         emit statusMessage(QStringLiteral("Catalog updated (%1 addons).")
                                .arg(m_catalog.addons.size()));
     });
+}
+
+void AddonStore::finishInstallFromBytes(const AddonCatalogEntry& entry, const AddonArtifact& art,
+                                        const QByteArray& body)
+{
+    const QString gotHash = sha256Hex(body);
+    if (gotHash.compare(art.sha256, Qt::CaseInsensitive) != 0) {
+        m_busy = false;
+        emit installFinished(
+            entry.id, false,
+            QStringLiteral("Checksum mismatch (expected %1, got %2).")
+                .arg(art.sha256, gotHash));
+        return;
+    }
+
+    const QString dir = addonDir(entry.id);
+    if (QDir(dir).exists()) {
+        QDir(dir).removeRecursively();
+    }
+    if (!QDir().mkpath(dir)) {
+        m_busy = false;
+        emit installFinished(entry.id, false,
+                             QStringLiteral("Could not create addon directory."));
+        return;
+    }
+
+    const QString fileName = guessPluginFileName(QUrl(art.url));
+    QFile plugin(dir + QLatin1Char('/') + fileName);
+    if (!plugin.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        m_busy = false;
+        emit installFinished(entry.id, false, QStringLiteral("Could not write plugin file."));
+        return;
+    }
+    plugin.write(body);
+    plugin.close();
+
+    AddonInstallRecord rec;
+    rec.id = entry.id;
+    rec.name = entry.name;
+    rec.version = entry.version;
+    rec.author = entry.author;
+    rec.description = entry.description;
+    rec.pluginFile = fileName;
+    rec.sha256 = art.sha256.toLower();
+    rec.abi = art.abi;
+    rec.enabled = true;
+    rec.installedAtMs = QDateTime::currentMSecsSinceEpoch();
+
+    QString writeErr;
+    if (!writeInstallRecord(rec, &writeErr)) {
+        m_busy = false;
+        QDir(dir).removeRecursively();
+        emit installFinished(entry.id, false, writeErr);
+        return;
+    }
+
+    AddonConfig::setEnabled(entry.id, true);
+    m_busy = false;
+    emit installFinished(entry.id, true, QString());
+    emit statusMessage(QStringLiteral("Installed %1 %2.").arg(entry.name, entry.version));
 }
 
 void AddonStore::installAddon(const QString& addonId)
@@ -284,9 +408,27 @@ void AddonStore::installAddon(const QString& addonId)
     }
 
     m_busy = true;
-    emit statusMessage(QStringLiteral("Downloading %1…").arg(entry->name));
 
     const QUrl url(art.url);
+    // Bundled addons use file:// — read directly (avoids QNAM local-file quirks).
+    if (url.isLocalFile() || url.scheme().compare(QStringLiteral("file"), Qt::CaseInsensitive) == 0) {
+        const QString localPath = url.isLocalFile() ? url.toLocalFile() : url.path();
+        emit statusMessage(QStringLiteral("Installing %1…").arg(entry->name));
+        QFile f(localPath);
+        if (!f.open(QIODevice::ReadOnly)) {
+            m_busy = false;
+            emit installFinished(entry->id, false,
+                                 QStringLiteral("Could not read package: %1").arg(localPath));
+            return;
+        }
+        const QByteArray body = f.readAll();
+        emit installProgress(addonId, body.size(), body.size());
+        finishInstallFromBytes(*entry, art, body);
+        return;
+    }
+
+    emit statusMessage(QStringLiteral("Downloading %1…").arg(entry->name));
+
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::UserAgentHeader, QLatin1String(kUserAgent));
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
@@ -299,7 +441,6 @@ void AddonStore::installAddon(const QString& addonId)
                 emit installProgress(addonId, received, total);
             });
 
-    // Capture by value what we need after async finish.
     const AddonCatalogEntry entryCopy = *entry;
     const AddonArtifact artCopy = art;
 
@@ -308,7 +449,9 @@ void AddonStore::installAddon(const QString& addonId)
 
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const QByteArray body = reply->readAll();
-        if (reply->error() != QNetworkReply::NoError || status < 200 || status >= 300) {
+        const bool httpOk = (status == 0 && reply->error() == QNetworkReply::NoError)
+            || (status >= 200 && status < 300);
+        if (reply->error() != QNetworkReply::NoError || !httpOk) {
             m_busy = false;
             QString err = reply->errorString();
             if (status > 0) {
@@ -319,63 +462,7 @@ void AddonStore::installAddon(const QString& addonId)
             return;
         }
 
-        const QString gotHash = sha256Hex(body);
-        if (gotHash.compare(artCopy.sha256, Qt::CaseInsensitive) != 0) {
-            m_busy = false;
-            emit installFinished(
-                entryCopy.id, false,
-                QStringLiteral("Checksum mismatch (expected %1, got %2).")
-                    .arg(artCopy.sha256, gotHash));
-            return;
-        }
-
-        const QString dir = addonDir(entryCopy.id);
-        if (QDir(dir).exists()) {
-            QDir(dir).removeRecursively();
-        }
-        if (!QDir().mkpath(dir)) {
-            m_busy = false;
-            emit installFinished(entryCopy.id, false,
-                                 QStringLiteral("Could not create addon directory."));
-            return;
-        }
-
-        const QString fileName = guessPluginFileName(QUrl(artCopy.url));
-        QFile plugin(dir + QLatin1Char('/') + fileName);
-        if (!plugin.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-            m_busy = false;
-            emit installFinished(entryCopy.id, false,
-                                 QStringLiteral("Could not write plugin file."));
-            return;
-        }
-        plugin.write(body);
-        plugin.close();
-
-        AddonInstallRecord rec;
-        rec.id = entryCopy.id;
-        rec.name = entryCopy.name;
-        rec.version = entryCopy.version;
-        rec.author = entryCopy.author;
-        rec.description = entryCopy.description;
-        rec.pluginFile = fileName;
-        rec.sha256 = artCopy.sha256.toLower();
-        rec.abi = artCopy.abi;
-        rec.enabled = true;
-        rec.installedAtMs = QDateTime::currentMSecsSinceEpoch();
-
-        QString writeErr;
-        if (!writeInstallRecord(rec, &writeErr)) {
-            m_busy = false;
-            QDir(dir).removeRecursively();
-            emit installFinished(entryCopy.id, false, writeErr);
-            return;
-        }
-
-        AddonConfig::setEnabled(entryCopy.id, true);
-        m_busy = false;
-        emit installFinished(entryCopy.id, true, QString());
-        emit statusMessage(QStringLiteral("Installed %1 %2.")
-                               .arg(entryCopy.name, entryCopy.version));
+        finishInstallFromBytes(entryCopy, artCopy, body);
     });
 }
 

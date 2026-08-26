@@ -111,6 +111,11 @@ TopNavBar::TopNavBar(SessionManager* sessions, SessionWorkspace* workspace, QWid
     navLay->addWidget(m_stats, 0);
     navLay->addWidget(m_xmodemBtn);
     navLay->addWidget(m_pinBtn);
+    m_aiAgentBtn = makeNavIcon(QStringLiteral(":/icons/ai-agent.svg"),
+                               QStringLiteral("AI agent"), this);
+    m_aiAgentBtn->setCheckable(true);
+    m_aiAgentBtn->setVisible(false);
+    navLay->addWidget(m_aiAgentBtn);
     navLay->addWidget(m_sftpBtn);
 
     m_statsThread = new QThread(this);
@@ -138,6 +143,11 @@ TopNavBar::TopNavBar(SessionManager* sessions, SessionWorkspace* workspace, QWid
         m_pinBtn->setToolTip(on ? QStringLiteral("always on top · on")
                                 : QStringLiteral("always on top"));
         emit alwaysOnTopToggled(on);
+    });
+    connect(m_aiAgentBtn, &QToolButton::toggled, this, [this](bool on) {
+        m_aiAgentBtn->setToolTip(on ? QStringLiteral("AI agent · on")
+                                    : QStringLiteral("AI agent"));
+        emit aiAgentToggled(on);
     });
 
     connect(m_sessions, &SessionManager::sessionOpened, this, [this](const QString&) { refresh(); });
@@ -389,6 +399,37 @@ void TopNavBar::setAlwaysOnTopChecked(bool on)
     m_pinBtn->setChecked(on);
     m_pinBtn->setToolTip(on ? QStringLiteral("always on top · on")
                             : QStringLiteral("always on top"));
+}
+
+void TopNavBar::setAiAgentAvailable(bool available, const QIcon& icon)
+{
+    if (!m_aiAgentBtn) {
+        return;
+    }
+    if (!icon.isNull()) {
+        m_aiAgentBtn->setIcon(icon);
+    }
+    m_aiAgentBtn->setVisible(available);
+    if (!available) {
+        const QSignalBlocker block(m_aiAgentBtn);
+        m_aiAgentBtn->setChecked(false);
+    }
+}
+
+void TopNavBar::setAiAgentPanelOpen(bool open)
+{
+    if (!m_aiAgentBtn) {
+        return;
+    }
+    const QSignalBlocker block(m_aiAgentBtn);
+    m_aiAgentBtn->setChecked(open);
+    m_aiAgentBtn->setToolTip(open ? QStringLiteral("AI agent · on")
+                                  : QStringLiteral("AI agent"));
+}
+
+bool TopNavBar::isAiAgentPanelOpen() const
+{
+    return m_aiAgentBtn && m_aiAgentBtn->isChecked();
 }
 
 void TopNavBar::refresh()

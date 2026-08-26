@@ -75,6 +75,24 @@
 - **🔧 Channel-aware builds** - the product version in `project(...)` is combined with an explicit `dev`, `beta`, or `stable` build channel and flows through About, Windows resources, installers, and package metadata.
 - **🧩 Addon marketplace** - browse and install optional addons from a remote catalog (Settings → Addons); nothing loads until you install and enable it.
 
+<br/>
+
+---
+
+## 🧩 &nbsp;Addons
+
+Optional plugins are downloaded from the catalog in this repository:
+
+[`addons/index.json`](https://raw.githubusercontent.com/hdmain/clientosh/main/addons/index.json)
+
+In the app: **Settings → Addons → Refresh catalog → Install**.
+
+| Addon | Description |
+|---|---|
+| **AI agent** | OpenAI-compatible side panel agent: streaming think, Markdown chat, multi-step shell commands with confirmation (read-only commands auto-run), terminal observation loop. Configure API base / model under **Settings → AI agent** after install. |
+
+Plugins are Qt `MODULE` libraries loaded with `QPluginLoader` only while installed and enabled — uninstalled addons use no extra RAM.
+
 > 💡 **What makes clientosh "fast"?** It's a **native Qt 6 / C++** app - no Electron or web-view overhead - so it's snappy to launch and sips about **~30 MB RAM**. Network I/O never touches the UI thread, the vault decrypts near-instantly via an in-memory machine-bound key (no keyring/DPAPI latency at launch), and animations are vsync-paced with no continuous timers while idle.
 
 <br/>
@@ -487,6 +505,7 @@ Settings are persisted as an INI file via Qt's `QSettings` (e.g. `%APPDATA%/clie
 - [x] Telnet terminal sessions
 - [x] Password auth with keyboard-interactive fallback
 - [x] Addon marketplace (install from catalog)
+- [x] AI agent addon (OpenAI-compatible terminal agent)
 - [ ] **Host-key verification** (see security note below)
 - [ ] SSH agent forwarding / SOCKS proxy / TCP forwarding
 - [ ] Multi-host broadcast / scripted command sender

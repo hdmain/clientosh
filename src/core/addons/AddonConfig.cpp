@@ -14,9 +14,9 @@ namespace AddonConfig {
 
 QString defaultRepositoryUrl()
 {
-    // Placeholder catalog — replace with the real clientosh-addons repo when published.
+    // Official catalog shipped in this repository (addons/index.json).
     return QStringLiteral(
-        "https://raw.githubusercontent.com/hdmain/clientosh-addons/main/index.json");
+        "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/index.json");
 }
 
 QString repositoryUrl()

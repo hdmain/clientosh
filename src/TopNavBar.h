@@ -4,6 +4,7 @@
 #include "core/ServerStatsClient.h"
 #include "core/SessionProfile.h"
 
+#include <QIcon>
 #include <QWidget>
 #include <QStringList>
 
@@ -29,6 +30,10 @@ public:
     void setAlwaysOnTopChecked(bool on);
     /** Controls tab highlighting without changing the active live session. */
     void setWorkspaceActive(bool active);
+    /** Show/hide the AI agent robot toggle (only while the addon is loaded). */
+    void setAiAgentAvailable(bool available, const QIcon& icon = QIcon());
+    void setAiAgentPanelOpen(bool open);
+    bool isAiAgentPanelOpen() const;
 
 signals:
     void dashboardRequested();
@@ -40,6 +45,7 @@ signals:
     void sftpRequested();
     void xmodemRequested(const QString& sessionId);
     void alwaysOnTopToggled(bool on);
+    void aiAgentToggled(bool open);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -65,6 +71,7 @@ private:
     QToolButton* m_menuBtn = nullptr;
     QToolButton* m_newBtn = nullptr;
     QToolButton* m_pinBtn = nullptr;
+    QToolButton* m_aiAgentBtn = nullptr;
     QToolButton* m_sftpBtn = nullptr;
     QToolButton* m_xmodemBtn = nullptr;
     QLabel* m_stats = nullptr;

@@ -2021,6 +2021,54 @@ void TerminalWidget::pasteClipboard()
     clearSelection();
 }
 
+void TerminalWidget::injectInput(const QByteArray& data)
+{
+    if (!m_interactive || data.isEmpty()) {
+        return;
+    }
+    QByteArray normalized = data;
+    normalized.replace("\r\n", "\r");
+    normalized.replace('\n', '\r');
+    emit inputReady(normalized);
+}
+
+QString TerminalWidget::captureRecentText(int maxLines) const
+{
+    if (maxLines < 1) {
+        maxLines = 1;
+    }
+    const int totalLines = m_scrollback.size() + m_rows;
+    const int startAbs = qMax(0, totalLines - maxLines);
+    QString out;
+    out.reserve(maxLines * (m_cols + 1));
+    for (int abs = startAbs; abs < totalLines; ++abs) {
+        QString line;
+        line.reserve(m_cols);
+        for (int c = 0; c < m_cols; ++c) {
+            const char32_t ch = cellAtAbsLine(abs, c).ch;
+            if (ch == 0 || ch == U' ') {
+                line.append(QLatin1Char(' '));
+            } else if (ch > 0xFFFF) {
+                line.append(QChar(QChar::ReplacementCharacter));
+            } else {
+                line.append(QChar(ushort(ch)));
+            }
+        }
+        while (line.endsWith(QLatin1Char(' '))) {
+            line.chop(1);
+        }
+        if (!out.isEmpty()) {
+            out += QLatin1Char('\n');
+        }
+        out += line;
+    }
+    // Drop leading blank lines so the agent sees useful tail.
+    while (out.startsWith(QLatin1Char('\n'))) {
+        out.remove(0, 1);
+    }
+    return out.trimmed();
+}
+
 void TerminalWidget::showContextMenu(const QPoint& globalPos)
 {
     if (!m_contextMenu) {

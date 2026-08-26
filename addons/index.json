@@ -1,12 +1,12 @@
 {
   "format": 1,
   "updated": "2026-08-26",
-  "notes": "Example catalog shape. The live catalog is addons/index.json in this repository.",
+  "notes": "Official clientosh addon catalog. Artifact ABI must match clientoshAddonAbi() (e.g. qt6.9-win64-mingw).",
   "addons": [
     {
       "id": "ai-agent",
       "name": "AI agent",
-      "description": "OpenAI-compatible terminal agent. See addons/index.json for publishable URLs and checksums.",
+      "description": "OpenAI-compatible terminal agent with streaming think, multi-step shell tools, Markdown chat, and auto-run for read-only commands. Loads only while installed and enabled.",
       "version": "1.0.8",
       "author": "clientosh",
       "homepage": "https://github.com/hdmain/clientosh",

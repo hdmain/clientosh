@@ -2,6 +2,7 @@
 
 #include "PanelTypes.h"
 #include "core/SessionProfile.h"
+#include "core/addons/AddonHostContext.h"
 
 #include <QMainWindow>
 #include <QHash>
@@ -17,6 +18,8 @@ class SessionWorkspace;
 class TerminalWidget;
 class TopNavBar;
 class SftpWindow;
+class AiAgentBridge;
+class QHBoxLayout;
 
 class MainWindow : public QMainWindow
 {
@@ -61,12 +64,20 @@ private:
     void closeXmodemProgress(const QString& id);
     TerminalWidget* findTerminal(const QString& id) const;
     void applyAlwaysOnTop(bool on);
+    void onAiAgentBridgeChanged(AiAgentBridge* bridge);
+    void setAiAgentPanelVisible(bool visible);
+    void refreshAiAgentSessionContext();
 
     SessionManager* m_sessions = nullptr;
     TopNavBar* m_topNav = nullptr;
     QStackedWidget* m_rootStack = nullptr;
+    QWidget* m_bodyHost = nullptr;
+    QHBoxLayout* m_bodyLay = nullptr;
     DashboardPage* m_dashboard = nullptr;
     SessionWorkspace* m_workspace = nullptr;
+    AddonHostContext m_addonContext;
+    AiAgentBridge* m_aiBridge = nullptr;
+    QWidget* m_aiPanel = nullptr;
     QHash<QString, SftpWindow*> m_sftpPanes;
     QHash<QString, QProgressDialog*> m_xmodemProgressDialogs;
     QString m_pendingSftpSessionId;

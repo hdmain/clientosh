@@ -10,7 +10,8 @@ class QNetworkAccessManager;
 
 /**
  * Downloads and manages on-disk addons from a remote index.json catalog.
- * Does not load plugins into the process — that is AddonHost's job later.
+ * Also merges the local addons-bundle shipped next to the executable.
+ * Plugin loading is AddonHost's job.
  */
 class AddonStore : public QObject
 {
@@ -22,6 +23,8 @@ public:
     /** Root directory: …/clientosh/addons */
     static QString addonsRoot();
     static QString addonDir(const QString& addonId);
+    /** Bundled packages next to the executable: …/addons-bundle */
+    static QString bundledAddonsRoot();
 
     QVector<AddonInstallRecord> installed() const;
     bool isInstalled(const QString& addonId) const;
@@ -48,6 +51,10 @@ signals:
 private:
     bool writeInstallRecord(const AddonInstallRecord& rec, QString* errorOut);
     bool readInstallRecord(const QString& addonId, AddonInstallRecord* out) const;
+    void mergeBundledCatalog();
+    /** Write plugin bytes + manifest; clears m_busy and emits installFinished. */
+    void finishInstallFromBytes(const AddonCatalogEntry& entry, const AddonArtifact& art,
+                                const QByteArray& body);
     static bool parseCatalog(const QByteArray& json, AddonCatalog* out, QString* errorOut);
     static QString sha256Hex(const QByteArray& data);
     static QString guessPluginFileName(const QUrl& url);

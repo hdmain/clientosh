@@ -40,6 +40,11 @@ Makefile
 *.o
 *.obj
 
+# Published addon packages hosted in this repository for the catalog
+!addons/packages/**/*.dll
+!addons/packages/**/*.so
+!addons/packages/**/*.dylib
+
 # Packaging logs
 packaging/build_err.log
 

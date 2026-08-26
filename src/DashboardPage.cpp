@@ -2193,9 +2193,9 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     applyStoredSyncState();
     syncRefreshUiFromSyncState();
 
-    // ---- Addons marketplace (install files only; no plugin load yet) ----
+    // ---- Addons marketplace (bundled AI agent + remote catalog) ----
     m_addonStore = new AddonStore(this);
-    m_addonHost = new AddonHost(m_addonStore, this);
+    // Host is created in bindAddonHostContext() once MainWindow provides context.
     connect(m_addonStore, &AddonStore::catalogUpdated, this, &DashboardPage::rebuildAddonsList);
     connect(m_addonStore, &AddonStore::statusMessage, this, [this](const QString& msg) {
         if (m_addonsStatus) {
@@ -2224,8 +2224,8 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
                 }
                 rebuildAddonsList();
             });
-    connect(m_addonHost, &AddonHost::installedChanged, this, &DashboardPage::rebuildAddonsList);
     rebuildAddonsList();
+    m_addonStore->refreshCatalog();
 
     connect(clearLogs, &QPushButton::clicked, this, [this]() { m_logsView->clear(); });
     connect(m_passEdit, &QLineEdit::returnPressed, this, &DashboardPage::connectFromForm);
@@ -5041,6 +5041,56 @@ void DashboardPage::persistAddonsRepoUrl()
         return;
     }
     AddonConfig::setRepositoryUrl(m_addonsRepoEdit->text().trimmed());
+}
+
+void DashboardPage::bindAddonHostContext(AddonHostContext* context)
+{
+    m_addonContext = context;
+    if (m_addonHost || !m_addonStore || !context) {
+        return;
+    }
+    m_addonHost = new AddonHost(m_addonStore, context, this);
+    connect(m_addonHost, &AddonHost::installedChanged, this, &DashboardPage::rebuildAddonsList);
+    connect(m_addonHost, &AddonHost::statusMessage, this, [this](const QString& msg) {
+        if (m_addonsStatus) {
+            m_addonsStatus->setText(msg);
+        }
+        appendLog(QStringLiteral("addons: %1").arg(msg));
+    });
+}
+
+void DashboardPage::setAiAgentSettingsPage(QWidget* page)
+{
+    if (!m_settingsNav || !m_settingsStack) {
+        return;
+    }
+
+    // Remove previous AI page if any.
+    if (m_aiSettingsNavIndex >= 0 && m_aiSettingsNavIndex < m_settingsNav->count()) {
+        QListWidgetItem* item = m_settingsNav->takeItem(m_aiSettingsNavIndex);
+        delete item;
+        if (m_aiSettingsPage) {
+            const int stackIdx = m_settingsStack->indexOf(m_aiSettingsPage);
+            if (stackIdx >= 0) {
+                m_settingsStack->removeWidget(m_aiSettingsPage);
+            }
+            // Owned by the plugin bridge — do not delete here.
+            m_aiSettingsPage = nullptr;
+        }
+        m_aiSettingsNavIndex = -1;
+    }
+
+    if (!page) {
+        return;
+    }
+
+    // Insert before About (last item).
+    const int aboutRow = m_settingsNav->count() - 1;
+    const int insertAt = qMax(0, aboutRow);
+    m_settingsNav->insertItem(insertAt, QStringLiteral("AI agent"));
+    m_settingsStack->insertWidget(insertAt, page);
+    m_aiSettingsNavIndex = insertAt;
+    m_aiSettingsPage = page;
 }
 
 void DashboardPage::rebuildAddonsList()

@@ -95,6 +95,16 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network Svg)
 
+# Must match clientoshAddonAbi() in AddonTypes.cpp
+if(WIN32)
+    set(CLIENTOSH_ADDON_ABI "qt${Qt6_VERSION_MAJOR}.${Qt6_VERSION_MINOR}-win64-mingw")
+elseif(APPLE)
+    set(CLIENTOSH_ADDON_ABI "qt${Qt6_VERSION_MAJOR}.${Qt6_VERSION_MINOR}-macos")
+else()
+    set(CLIENTOSH_ADDON_ABI "qt${Qt6_VERSION_MAJOR}.${Qt6_VERSION_MINOR}-linux-x64")
+endif()
+message(STATUS "clientosh addon ABI: ${CLIENTOSH_ADDON_ABI}")
+
 # ---- libssh (pkg-config, LIBSSH_ROOT, or system paths) ----
 set(LIBSSH_ROOT "" CACHE PATH "Optional libssh install prefix (include/ + lib/)")
 
@@ -262,6 +272,44 @@ target_link_libraries(clientosh PRIVATE
     Qt6::Svg
     ${CLIENTOSH_LIBSSH_TARGET}
     ${CLIENTOSH_OPENSSL_TARGET}
+)
+
+# ---- AI agent addon (lazy-loaded MODULE; not linked into clientosh) --------
+add_library(clientosh_addon_ai_agent MODULE
+    src/addons/ai_agent/AiAgentPlugin.cpp
+    src/addons/ai_agent/AiAgentBridgeImpl.cpp
+    src/addons/ai_agent/AiAgentClient.cpp
+    src/addons/ai_agent/AiAgentPanel.cpp
+    src/addons/ai_agent/AiAgentSettingsPage.cpp
+    src/addons/ai_agent/ai_agent.qrc
+)
+target_include_directories(clientosh_addon_ai_agent PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/addons/ai_agent
+)
+target_link_libraries(clientosh_addon_ai_agent PRIVATE
+    Qt6::Widgets
+    Qt6::Network
+    Qt6::Svg
+)
+set_target_properties(clientosh_addon_ai_agent PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME "ai_agent"
+    AUTOMOC ON
+    AUTORCC ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+add_dependencies(clientosh clientosh_addon_ai_agent)
+
+add_custom_command(TARGET clientosh_addon_ai_agent POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        "-DPLUGIN_FILE=$<TARGET_FILE:clientosh_addon_ai_agent>"
+        "-DBUNDLE_DIR=$<TARGET_FILE_DIR:clientosh>/addons-bundle"
+        "-DABI=${CLIENTOSH_ADDON_ABI}"
+        "-DVERSION=${PROJECT_VERSION}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/bundle_ai_agent_addon.cmake"
+    VERBATIM
 )
 
 if(BUILD_TESTING)

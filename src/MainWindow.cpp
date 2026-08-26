@@ -5,6 +5,8 @@
 #include "core/AppSettings.h"
 #include "core/SessionManager.h"
 #include "core/SessionProfile.h"
+#include "core/addons/AddonHostContext.h"
+#include "core/addons/AiAgentBridge.h"
 #include "platform/WindowStayOnTop.h"
 #include "SessionWorkspace.h"
 #include "SftpWindow.h"
@@ -17,6 +19,7 @@
 #include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QMenu>
 #include <QMessageBox>
@@ -52,10 +55,61 @@ MainWindow::MainWindow(QWidget* parent)
     m_topNav = new TopNavBar(m_sessions, m_workspace, central);
     root->addWidget(m_topNav);
 
-    m_rootStack = new QStackedWidget(central);
-    root->addWidget(m_rootStack, 1);
+    m_bodyHost = new QWidget(central);
+    m_bodyLay = new QHBoxLayout(m_bodyHost);
+    m_bodyLay->setContentsMargins(0, 0, 0, 0);
+    m_bodyLay->setSpacing(0);
+    root->addWidget(m_bodyHost, 1);
+
+    m_rootStack = new QStackedWidget(m_bodyHost);
+    m_bodyLay->addWidget(m_rootStack, 1);
+
+    m_addonContext.setSessionContextProvider([this](QString* host, QString* user, int* port,
+                                                     QString* cwdHint) {
+        const QString id = m_sessions ? m_sessions->activeId() : QString();
+        if (id.isEmpty() || !m_sessions) {
+            return;
+        }
+        if (const auto* live = m_sessions->session(id)) {
+            if (host) {
+                *host = live->profile.host;
+            }
+            if (user) {
+                *user = live->profile.user;
+            }
+            if (port) {
+                *port = live->profile.port;
+            }
+            if (cwdHint) {
+                cwdHint->clear(); // filled when the agent runs `pwd`
+            }
+        }
+    });
+    m_addonContext.setInjectInput([this](const QByteArray& data) -> bool {
+        const QString id = m_sessions ? m_sessions->activeId() : QString();
+        TerminalWidget* term = findTerminal(id);
+        if (!term) {
+            return false;
+        }
+        // Visually echo the command in the terminal buffer, then send to PTY.
+        term->appendOutput(QByteArray("\r\n\x1b[90m# ai ▸ \x1b[0m") + data);
+        term->injectInput(data);
+        return true;
+    });
+    m_addonContext.setCaptureTerminal([this](int maxLines) -> QString {
+        const QString id = m_sessions ? m_sessions->activeId() : QString();
+        TerminalWidget* term = findTerminal(id);
+        if (!term) {
+            return {};
+        }
+        return term->captureRecentText(maxLines);
+    });
+    m_addonContext.setBridgeChangedHandler([this](AiAgentBridge* bridge) {
+        onAiAgentBridgeChanged(bridge);
+    });
 
     m_dashboard = new DashboardPage(m_sessions);
+    m_dashboard->bindAddonHostContext(&m_addonContext);
 
     m_rootStack->addWidget(m_dashboard);
     m_rootStack->addWidget(m_workspace);
@@ -128,11 +182,17 @@ MainWindow::MainWindow(QWidget* parent)
         AppSettings::setAlwaysOnTop(on);
         applyAlwaysOnTop(on);
     });
+    connect(m_topNav, &TopNavBar::aiAgentToggled, this, [this](bool on) {
+        setAiAgentPanelVisible(on);
+    });
 
     connect(m_workspace, &SessionWorkspace::sessionSelectRequested, this, &MainWindow::openOrFocusSession);
     connect(m_workspace, &SessionWorkspace::panelSelectRequested, this, &MainWindow::openOrFocusPanel);
     connect(m_workspace, &SessionWorkspace::panelCloseRequested, this, &MainWindow::closePanel);
 
+    connect(m_sessions, &SessionManager::sessionActivated, this, [this](const QString&) {
+        refreshAiAgentSessionContext();
+    });
     connect(m_sessions, &SessionManager::sessionDataReceived, this,
             [this](const QString& id, const QByteArray& data) {
                 if (TerminalWidget* term = findTerminal(id)) {
@@ -288,6 +348,68 @@ void MainWindow::applyAlwaysOnTop(bool on)
             setWindowStayOnTop(w, on);
         }
     }
+}
+
+void MainWindow::onAiAgentBridgeChanged(AiAgentBridge* bridge)
+{
+    if (m_aiBridge == bridge) {
+        return;
+    }
+
+    // Tear down previous UI.
+    m_dashboard->setAiAgentSettingsPage(nullptr);
+    setAiAgentPanelVisible(false);
+    if (m_aiPanel) {
+        m_bodyLay->removeWidget(m_aiPanel);
+        m_aiPanel->hide();
+        m_aiPanel = nullptr;
+    }
+    m_topNav->setAiAgentAvailable(false);
+    m_aiBridge = bridge;
+
+    if (!m_aiBridge) {
+        return;
+    }
+
+    QWidget* settingsPage = m_aiBridge->createSettingsPage(m_dashboard);
+    m_dashboard->setAiAgentSettingsPage(settingsPage);
+
+    m_aiPanel = m_aiBridge->createPanel(m_bodyHost);
+    if (m_aiPanel) {
+        m_aiPanel->hide();
+        m_bodyLay->addWidget(m_aiPanel, 0);
+    }
+    m_topNav->setAiAgentAvailable(true, m_aiBridge->navIcon());
+    refreshAiAgentSessionContext();
+}
+
+void MainWindow::setAiAgentPanelVisible(bool visible)
+{
+    if (!m_aiPanel) {
+        m_topNav->setAiAgentPanelOpen(false);
+        return;
+    }
+    m_aiPanel->setVisible(visible);
+    m_topNav->setAiAgentPanelOpen(visible);
+    if (visible) {
+        refreshAiAgentSessionContext();
+        showWorkspace();
+    }
+}
+
+void MainWindow::refreshAiAgentSessionContext()
+{
+    if (!m_aiBridge) {
+        return;
+    }
+    QString host;
+    QString user;
+    int port = 22;
+    QString cwd;
+    if (m_addonContext.sessionContextProvider()) {
+        m_addonContext.sessionContextProvider()(&host, &user, &port, &cwd);
+    }
+    m_aiBridge->setSessionContext(host, user, port, cwd);
 }
 
 void MainWindow::showEvent(QShowEvent* event)

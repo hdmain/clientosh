@@ -37,6 +37,10 @@ public:
     void syncPtySize(bool forceEmit = false);
     void showFontSizeOverlay(int points);
     void scrollViewToBottom();
+    /** Inject keystrokes into the remote PTY (used by AI agent confirmed commands). */
+    void injectInput(const QByteArray& data);
+    /** Plain-text snapshot of the newest scrollback + live screen (for AI observation). */
+    QString captureRecentText(int maxLines = 80) const;
 
 signals:
     void inputReady(const QByteArray& data);

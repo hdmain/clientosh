@@ -4,6 +4,7 @@
 #include "core/sync/SyncController.h"
 #include "core/addons/AddonHost.h"
 #include "core/addons/AddonStore.h"
+#include "core/addons/AddonHostContext.h"
 
 #include <QColor>
 #include <QHash>
@@ -49,6 +50,13 @@ public:
     void syncTerminalFontSizeUi(int points);
     /** Persist a currently open terminal/SFTP profile if it is not saved yet. */
     void saveSessionProfile(const SessionProfile& profile);
+
+    AddonStore* addonStore() const { return m_addonStore; }
+    AddonHost* addonHost() const { return m_addonHost; }
+    /** Bind host context used for QPluginLoader addons (call once from MainWindow). */
+    void bindAddonHostContext(AddonHostContext* context);
+    /** Insert/remove the AI agent settings category (null clears). */
+    void setAiAgentSettingsPage(QWidget* page);
 
 signals:
     void openProfile(const SessionProfile& profile);
@@ -303,6 +311,9 @@ private:
     // ---- Addons (marketplace; plugin load comes later) ----------------------
     AddonStore* m_addonStore = nullptr;
     AddonHost* m_addonHost = nullptr;
+    AddonHostContext* m_addonContext = nullptr;
+    int m_aiSettingsNavIndex = -1;
+    QWidget* m_aiSettingsPage = nullptr;
     QLineEdit* m_addonsRepoEdit = nullptr;
     QPushButton* m_addonsRefreshBtn = nullptr;
     QLabel* m_addonsAbiLabel = nullptr;
