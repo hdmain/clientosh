@@ -8,6 +8,7 @@
 #include <QColor>
 #include <QHash>
 #include <QStringList>
+#include <QUrl>
 #include <QWidget>
 #include <QVector>
 
@@ -29,6 +30,8 @@ class QComboBox;
 class QSlider;
 class QAbstractButton;
 class QKeySequenceEdit;
+class QNetworkAccessManager;
+class QNetworkReply;
 class QVBoxLayout;
 
 class DashboardPage : public QWidget
@@ -321,9 +324,17 @@ private:
     void persistSyncLive();
     void applyStoredSyncState();
 
+    void checkForUpdates();
+    void handleUpdateCheckReply(QNetworkReply* reply);
+
     QLabel* m_hint = nullptr;
 
     QLabel* m_aboutCurrentVersion = nullptr;
+    QLabel* m_aboutUpdateStatus = nullptr;
+    QPushButton* m_aboutDownloadBtn = nullptr;
+    QNetworkAccessManager* m_updateNam = nullptr;
+    QUrl m_aboutReleaseUrl;
+    bool m_updateCheckInFlight = false;
 
     QVector<SessionProfile> m_profiles;
     QStringList m_tags;

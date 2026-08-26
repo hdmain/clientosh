@@ -14,6 +14,7 @@
 #include "core/addons/AddonStore.h"
 #include "core/addons/AddonTypes.h"
 #include "core/VaultManager.h"
+#include "core/UpdateCheck.h"
 #include "ui/Motion.h"
 
 #include <libssh/libssh.h>
@@ -39,6 +40,9 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPainter>
 #include <QFrame>
 #include <QSysInfo>
@@ -1572,6 +1576,23 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
         m_aboutCurrentVersion->setObjectName(QStringLiteral("settingsAboutVersion"));
         m_aboutCurrentVersion->setAlignment(Qt::AlignHCenter);
 
+        m_aboutUpdateStatus = new QLabel(QStringLiteral("Checking for updates…"), sec);
+        m_aboutUpdateStatus->setObjectName(QStringLiteral("settingsAboutUpdate"));
+        m_aboutUpdateStatus->setAlignment(Qt::AlignHCenter);
+        m_aboutUpdateStatus->setWordWrap(true);
+
+        m_aboutDownloadBtn = new QPushButton(QStringLiteral("Download"), sec);
+        m_aboutDownloadBtn->setObjectName(QStringLiteral("dashPrimary"));
+        m_aboutDownloadBtn->setCursor(Qt::PointingHandCursor);
+        m_aboutDownloadBtn->setFocusPolicy(Qt::NoFocus);
+        m_aboutDownloadBtn->hide();
+        connect(m_aboutDownloadBtn, &QPushButton::clicked, this, [this]() {
+            const QUrl url = m_aboutReleaseUrl.isValid()
+                ? m_aboutReleaseUrl
+                : QUrl(QStringLiteral("https://github.com/hdmain/clientosh/releases/latest"));
+            QDesktopServices::openUrl(url);
+        });
+
         auto* starBtn = new QPushButton(QStringLiteral("★ Star on GitHub"), sec);
         starBtn->setObjectName(QStringLiteral("dashPrimary"));
         starBtn->setCursor(Qt::PointingHandCursor);
@@ -1586,7 +1607,11 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
         aLay->addWidget(appName);
         aLay->addSpacing(6);
         aLay->addWidget(m_aboutCurrentVersion);
-        aLay->addSpacing(16);
+        aLay->addSpacing(8);
+        aLay->addWidget(m_aboutUpdateStatus);
+        aLay->addSpacing(10);
+        aLay->addWidget(m_aboutDownloadBtn, 0, Qt::AlignHCenter);
+        aLay->addSpacing(12);
         aLay->addWidget(starBtn, 0, Qt::AlignHCenter);
         aLay->addStretch(1);
 
@@ -2216,6 +2241,98 @@ void DashboardPage::setSettingsCategory(int index)
         return;
     }
     m_settingsStack->setCurrentIndex(index);
+    // About is the last settings category — refresh GitHub latest-release status.
+    if (m_settingsNav && index == m_settingsNav->count() - 1) {
+        checkForUpdates();
+    }
+}
+
+void DashboardPage::checkForUpdates()
+{
+    if (!m_aboutUpdateStatus || !m_aboutDownloadBtn) {
+        return;
+    }
+    if (m_updateCheckInFlight) {
+        return;
+    }
+    if (!m_updateNam) {
+        m_updateNam = new QNetworkAccessManager(this);
+    }
+
+    m_updateCheckInFlight = true;
+    m_aboutDownloadBtn->hide();
+    m_aboutReleaseUrl = QUrl();
+    m_aboutUpdateStatus->setText(QStringLiteral("Checking for updates…"));
+
+    QNetworkRequest req(
+        QUrl(QStringLiteral("https://api.github.com/repos/hdmain/clientosh/releases/latest")));
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("clientosh/%1").arg(QStringLiteral(CLIENTOSH_VERSION)));
+    req.setRawHeader("Accept", "application/vnd.github+json");
+    // Avoid hanging the About page forever on a stalled connection.
+    req.setTransferTimeout(12000);
+
+    QNetworkReply* reply = m_updateNam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handleUpdateCheckReply(reply);
+    });
+}
+
+void DashboardPage::handleUpdateCheckReply(QNetworkReply* reply)
+{
+    m_updateCheckInFlight = false;
+    if (!reply) {
+        return;
+    }
+    reply->deleteLater();
+    if (!m_aboutUpdateStatus || !m_aboutDownloadBtn) {
+        return;
+    }
+
+    if (reply->error() != QNetworkReply::NoError) {
+        m_aboutUpdateStatus->setText(QStringLiteral("Could not check for updates"));
+        m_aboutDownloadBtn->hide();
+        return;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    if (!doc.isObject()) {
+        m_aboutUpdateStatus->setText(QStringLiteral("Could not check for updates"));
+        m_aboutDownloadBtn->hide();
+        return;
+    }
+
+    const QJsonObject obj = doc.object();
+    const QString tagName = obj.value(QStringLiteral("tag_name")).toString().trimmed();
+    const QString htmlUrl = obj.value(QStringLiteral("html_url")).toString().trimmed();
+    const UpdateCheck::SemVer latest = UpdateCheck::parseSemVer(tagName);
+    const UpdateCheck::SemVer current =
+        UpdateCheck::parseSemVer(QStringLiteral(CLIENTOSH_PRODUCT_VERSION));
+
+    if (!latest.valid) {
+        m_aboutUpdateStatus->setText(QStringLiteral("Could not check for updates"));
+        m_aboutDownloadBtn->hide();
+        return;
+    }
+
+    const QString latestLabel = UpdateCheck::format(latest);
+    if (UpdateCheck::shouldOfferUpdate(current, latest,
+                                       QStringLiteral(CLIENTOSH_BUILD_CHANNEL))) {
+        m_aboutReleaseUrl = QUrl(htmlUrl);
+        if (!m_aboutReleaseUrl.isValid()) {
+            m_aboutReleaseUrl =
+                QUrl(QStringLiteral("https://github.com/hdmain/clientosh/releases/tag/%1")
+                         .arg(tagName));
+        }
+        m_aboutUpdateStatus->setText(
+            QStringLiteral("New version v%1 is available").arg(latestLabel));
+        m_aboutDownloadBtn->setText(QStringLiteral("Download v%1").arg(latestLabel));
+        m_aboutDownloadBtn->show();
+    } else {
+        m_aboutUpdateStatus->setText(QStringLiteral("You're up to date"));
+        m_aboutDownloadBtn->hide();
+        m_aboutReleaseUrl = QUrl();
+    }
 }
 
 void DashboardPage::populateFontCombos()
