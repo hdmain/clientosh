@@ -1,13 +1,13 @@
 #pragma once
 
 #include <QByteArray>
+#include <QNetworkReply>
 #include <QObject>
 #include <QPointer>
 #include <QString>
 #include <QVector>
 
 class QNetworkAccessManager;
-class QNetworkReply;
 
 struct AiChatMessage {
     QString role; // system | user | assistant
