@@ -83,7 +83,6 @@ MainWindow::MainWindow(QWidget* parent)
             }
         }
         m_topNav->applySettings();
-        m_dashboard->refresh();
         rebindShortcuts();
     });
 
@@ -188,8 +187,8 @@ MainWindow::MainWindow(QWidget* parent)
                     m_pendingSftpSessionId.clear();
                     openSftp(id);
                 }
+                // Dashboard lists are owned by DashboardPage's SessionManager handlers.
                 m_topNav->refresh();
-                m_dashboard->refresh();
             });
 
     connect(m_sessions, &SessionManager::xmodemStarted, this,
@@ -254,7 +253,7 @@ MainWindow::MainWindow(QWidget* parent)
         } else {
             showWorkspace();
         }
-        m_dashboard->refresh();
+        // Dashboard lists are owned by DashboardPage's SessionManager handlers.
         m_topNav->refresh();
     });
 
@@ -317,7 +316,8 @@ void MainWindow::closeEvent(QCloseEvent* event)
 void MainWindow::showDashboard()
 {
     m_topNav->setWorkspaceActive(false);
-    m_dashboard->refresh();
+    // Do not reload the vault here — profiles are already in memory and live
+    // session rows are kept current by DashboardPage's SessionManager handlers.
     m_rootStack->setCurrentWidget(m_dashboard);
     m_topNav->setVisible(m_workspace->hasAttachedSessions());
 }
@@ -1033,11 +1033,25 @@ void MainWindow::applyTheme()
         "  color: {{text}};"
         "  border: 1px solid {{border}};"
         "  border-radius: 0;"
-        "  padding: 4px 6px;"
+        "  padding: 4px 28px 4px 6px;"
         "  font-size: 12px;"
+        "  min-height: 22px;"
         "}"
         "QComboBox:hover { border-color: {{borderStrong}}; }"
-        "QComboBox::drop-down { border: none; width: 18px; }"
+        "QComboBox::drop-down {"
+        "  subcontrol-origin: border;"
+        "  subcontrol-position: top right;"
+        "  width: 22px;"
+        "  border: none;"
+        "  border-left: 1px solid {{border}};"
+        "  background: {{buttonBg}};"
+        "}"
+        "QComboBox::drop-down:hover { background: {{buttonHover}}; }"
+        "QComboBox::down-arrow {"
+        "  image: url(:/icons/chevron-down.svg);"
+        "  width: 10px;"
+        "  height: 10px;"
+        "}"
         "QComboBox QAbstractItemView {"
         "  background: {{surfaceBg}};"
         "  color: {{text}};"
@@ -1046,8 +1060,13 @@ void MainWindow::applyTheme()
         "}"
         "QLabel#settingsFontPreview {"
         "  color: {{text}};"
-        "  font-size: 12px;"
-        "  padding: 8px 0 0 0;"
+        "  background: {{surfaceBg}};"
+        "  border: 1px solid {{border}};"
+        "  padding: 8px;"
+        "}"
+        "QLabel#settingsTermPreview {"
+        "  border: 1px solid {{border}};"
+        "  padding: 8px;"
         "}"
         "QLabel#settingsAboutName {"
         "  color: {{textBright}};"
@@ -1164,8 +1183,39 @@ void MainWindow::applyTheme()
         "QToolButton#dashRowAction:disabled { color: {{textDim}}; }"
         "QWidget#dashRowActions { background: transparent; }"
         "QLineEdit:focus, QSpinBox:focus { border: 1px solid {{borderStrong}}; }"
+        "QSpinBox {"
+        "  padding-right: 22px;"
+        "  min-height: 22px;"
+        "}"
         "QSpinBox::up-button, QSpinBox::down-button {"
-        "  width: 14px; background: {{windowBg}}; border: none;"
+        "  subcontrol-origin: border;"
+        "  width: 20px;"
+        "  background: {{buttonBg}};"
+        "  border: none;"
+        "  border-left: 1px solid {{border}};"
+        "}"
+        "QSpinBox::up-button {"
+        "  subcontrol-position: top right;"
+        "  border-bottom: 1px solid {{border}};"
+        "}"
+        "QSpinBox::down-button {"
+        "  subcontrol-position: bottom right;"
+        "}"
+        "QSpinBox::up-button:hover, QSpinBox::down-button:hover {"
+        "  background: {{buttonHover}};"
+        "}"
+        "QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {"
+        "  background: {{buttonPressed}};"
+        "}"
+        "QSpinBox::up-arrow {"
+        "  image: url(:/icons/chevron-up.svg);"
+        "  width: 9px;"
+        "  height: 9px;"
+        "}"
+        "QSpinBox::down-arrow {"
+        "  image: url(:/icons/chevron-down.svg);"
+        "  width: 9px;"
+        "  height: 9px;"
         "}"
         "QPushButton, QToolButton#navIconBtn {"
         "  background-color: {{buttonBg}};"
@@ -1175,6 +1225,7 @@ void MainWindow::applyTheme()
         "  padding: 3px 10px;"
         "  font-size: 11px;"
         "}"
+        "QPushButton, QToolButton, QCheckBox, QRadioButton { cursor: pointing-hand; }"
         "QPushButton#dashButton {"
         "  background-color: {{buttonBg}};"
         "  border: 1px solid {{border}};"

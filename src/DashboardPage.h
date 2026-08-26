@@ -80,9 +80,11 @@ private:
         About
     };
 
+    void rebuildLists();
     void rebuildSavedList();
     void rebuildActiveList();
     void rebuildKeychainList();
+    void startDeferredSyncRestore();
     void applySavedFilter();
     // ---- Host tags ------------------------------------------------------
     void showHostContextMenu(const QPoint& globalPos, const QString& profileId);
@@ -341,5 +343,7 @@ private:
     QHash<QString, QStringList> m_tagAssignments; // tagName → profile IDs
     QStringList m_tagCollapsed;                   // stable keys of collapsed host folders
     QString m_editingId;
+    QString m_deferredSyncKey;
+    QString m_deferredSyncToken;
     NavPage m_currentNav = NavPage::Hosts;
 };

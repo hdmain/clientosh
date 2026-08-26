@@ -5,6 +5,8 @@
     <file>icons/detach.svg</file>
     <file>icons/attach.svg</file>
     <file>icons/plus.svg</file>
+    <file>icons/chevron-up.svg</file>
+    <file>icons/chevron-down.svg</file>
     <file>icons/settings.svg</file>
     <file>icons/terminal.svg</file>
     <file>icons/home.svg</file>

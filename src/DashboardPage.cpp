@@ -936,87 +936,165 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
 
     // Appearance
     {
-        QWidget* sec = buildSettingsSection(QStringLiteral("Appearance / UI"), m_settingsStack);
+        QWidget* sec = buildSettingsSection(QStringLiteral("Appearance"), m_settingsStack);
+        auto* secLay = qobject_cast<QVBoxLayout*>(sec->layout());
+
+        auto addSubsection = [sec, secLay](const QString& title, bool withDivider) {
+            if (withDivider) {
+                secLay->addSpacing(6);
+                auto* div = new QFrame(sec);
+                div->setObjectName(QStringLiteral("settingsDivider"));
+                div->setFrameShape(QFrame::HLine);
+                secLay->addWidget(div);
+            }
+            auto* lab = new QLabel(title, sec);
+            lab->setObjectName(QStringLiteral("settingsSubsection"));
+            secLay->addWidget(lab);
+            secLay->addSpacing(2);
+        };
+
+        auto addFieldLabel = [sec, secLay](const QString& text) {
+            auto* lab = new QLabel(text, sec);
+            lab->setObjectName(QStringLiteral("fieldLabel"));
+            secLay->addSpacing(4);
+            secLay->addWidget(lab);
+        };
+
+        auto makeInlineRow = [sec]() {
+            auto* row = new QWidget(sec);
+            auto* lay = new QHBoxLayout(row);
+            lay->setContentsMargins(0, 0, 0, 0);
+            lay->setSpacing(8);
+            return std::pair<QWidget*, QHBoxLayout*>{row, lay};
+        };
+
+        // ---- App ----
+        addSubsection(QStringLiteral("App"), false);
+
         m_settingsTheme = new QComboBox(sec);
         m_settingsTheme->addItem(QStringLiteral("Dark"), QStringLiteral("dark"));
         m_settingsTheme->addItem(QStringLiteral("Light"), QStringLiteral("light"));
+        m_settingsTheme->setMaximumWidth(220);
+        addFieldLabel(QStringLiteral("Theme"));
+        secLay->addWidget(m_settingsTheme);
 
         m_settingsUiFontFamily = new QComboBox(sec);
         m_settingsUiFontSize = new QSpinBox(sec);
         m_settingsUiFontSize->setRange(9, 22);
         m_settingsUiFontSize->setSuffix(QStringLiteral(" pt"));
+        m_settingsUiFontSize->setFixedWidth(92);
+        {
+            auto [row, lay] = makeInlineRow();
+            m_settingsUiFontFamily->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            lay->addWidget(m_settingsUiFontFamily, 1);
+            lay->addWidget(m_settingsUiFontSize);
+            addFieldLabel(QStringLiteral("UI font"));
+            secLay->addWidget(row);
+        }
+
+        auto* uiPreview = new QLabel(QStringLiteral("Hosts · Settings · Connect"), sec);
+        uiPreview->setObjectName(QStringLiteral("settingsFontPreview"));
+        uiPreview->setContentsMargins(8, 8, 8, 8);
+        secLay->addSpacing(4);
+        secLay->addWidget(uiPreview);
+
+        // ---- Terminal ----
+        addSubsection(QStringLiteral("Terminal"), true);
 
         m_settingsFontFamily = new QComboBox(sec);
         m_settingsFontSize = new QSpinBox(sec);
         m_settingsFontSize->setRange(9, 22);
         m_settingsFontSize->setSuffix(QStringLiteral(" pt"));
+        m_settingsFontSize->setFixedWidth(92);
+        {
+            auto [row, lay] = makeInlineRow();
+            m_settingsFontFamily->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            lay->addWidget(m_settingsFontFamily, 1);
+            lay->addWidget(m_settingsFontSize);
+            addFieldLabel(QStringLiteral("Font"));
+            secLay->addWidget(row);
+        }
 
         m_settingsTermFgBtn = new QToolButton(sec);
         m_settingsTermFgBtn->setObjectName(QStringLiteral("colorSwatchBtn"));
-        m_settingsTermFgBtn->setFixedSize(72, 24);
-        m_settingsTermFgBtn->setCursor(Qt::PointingHandCursor);
+        m_settingsTermFgBtn->setFixedSize(88, 26);
         m_settingsTermFgBtn->setFocusPolicy(Qt::NoFocus);
         m_settingsTermBgBtn = new QToolButton(sec);
         m_settingsTermBgBtn->setObjectName(QStringLiteral("colorSwatchBtn"));
-        m_settingsTermBgBtn->setFixedSize(72, 24);
-        m_settingsTermBgBtn->setCursor(Qt::PointingHandCursor);
+        m_settingsTermBgBtn->setFixedSize(88, 26);
         m_settingsTermBgBtn->setFocusPolicy(Qt::NoFocus);
+        {
+            auto [row, lay] = makeInlineRow();
+            auto* fgLab = new QLabel(QStringLiteral("Text"), row);
+            fgLab->setObjectName(QStringLiteral("fieldLabel"));
+            auto* bgLab = new QLabel(QStringLiteral("Background"), row);
+            bgLab->setObjectName(QStringLiteral("fieldLabel"));
+            lay->addWidget(fgLab);
+            lay->addWidget(m_settingsTermFgBtn);
+            lay->addSpacing(12);
+            lay->addWidget(bgLab);
+            lay->addWidget(m_settingsTermBgBtn);
+            lay->addStretch(1);
+            addFieldLabel(QStringLiteral("Colors"));
+            secLay->addWidget(row);
+        }
 
+        m_settingsTermBgImage = new QLabel(QStringLiteral("None"), sec);
+        m_settingsTermBgImage->setObjectName(QStringLiteral("dashHint"));
+        m_settingsTermBgImage->setWordWrap(false);
+        m_settingsTermBgImage->setMinimumWidth(80);
         m_settingsTermBgImageBtn = new QToolButton(sec);
         m_settingsTermBgImageBtn->setObjectName(QStringLiteral("dashSecondary"));
         m_settingsTermBgImageBtn->setText(QStringLiteral("Choose…"));
-        m_settingsTermBgImageBtn->setCursor(Qt::PointingHandCursor);
         m_settingsTermBgImageBtn->setFocusPolicy(Qt::NoFocus);
-        m_settingsTermBgImage = new QLabel(sec);
-        m_settingsTermBgImage->setObjectName(QStringLiteral("dashHint"));
-        m_settingsTermBgImage->setWordWrap(true);
-        m_settingsTermBgImage->setMinimumHeight(24);
+        {
+            auto [row, lay] = makeInlineRow();
+            m_settingsTermBgImage->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+            lay->addWidget(m_settingsTermBgImage, 1);
+            lay->addWidget(m_settingsTermBgImageBtn);
+            addFieldLabel(QStringLiteral("Background image"));
+            secLay->addWidget(row);
+        }
+
         m_settingsTermBgOpacity = new QSpinBox(sec);
         m_settingsTermBgOpacity->setRange(0, 100);
         m_settingsTermBgOpacity->setSuffix(QStringLiteral("%"));
         m_settingsTermBgOpacity->setSingleStep(5);
+        m_settingsTermBgOpacity->setFixedWidth(92);
         m_settingsTermBgBlur = new QSpinBox(sec);
         m_settingsTermBgBlur->setRange(0, 100);
         m_settingsTermBgBlur->setSuffix(QStringLiteral(" px"));
         m_settingsTermBgBlur->setSingleStep(5);
+        m_settingsTermBgBlur->setFixedWidth(100);
+        {
+            auto [row, lay] = makeInlineRow();
+            auto* opLab = new QLabel(QStringLiteral("Opacity"), row);
+            opLab->setObjectName(QStringLiteral("fieldLabel"));
+            auto* blurLab = new QLabel(QStringLiteral("Blur"), row);
+            blurLab->setObjectName(QStringLiteral("fieldLabel"));
+            lay->addWidget(opLab);
+            lay->addWidget(m_settingsTermBgOpacity);
+            lay->addSpacing(12);
+            lay->addWidget(blurLab);
+            lay->addWidget(m_settingsTermBgBlur);
+            lay->addStretch(1);
+            addFieldLabel(QStringLiteral("Image effects"));
+            secLay->addWidget(row);
+        }
 
-        addSettingsField(sec, QStringLiteral("Theme"), m_settingsTheme);
-        addSettingsField(sec, QStringLiteral("UI font"), m_settingsUiFontFamily);
-        addSettingsField(sec, QStringLiteral("UI font size"), m_settingsUiFontSize);
-
-            auto* secLay = qobject_cast<QVBoxLayout*>(sec->layout());
-        auto* guiSub = new QLabel(QStringLiteral("GUI appearance"), sec);
-        guiSub->setObjectName(QStringLiteral("settingsSubsection"));
-        secLay->addSpacing(2);
-        secLay->addWidget(guiSub);
-
-        auto* terminalSub = new QLabel(QStringLiteral("Terminal appearance"), sec);
-        terminalSub->setObjectName(QStringLiteral("settingsSubsection"));
-        auto* terminalDiv = new QFrame(sec);
-        terminalDiv->setObjectName(QStringLiteral("settingsDivider"));
-        terminalDiv->setFrameShape(QFrame::HLine);
-        secLay->addWidget(terminalSub);
-        secLay->addWidget(terminalDiv);
-        secLay->addSpacing(2);
-
-        addSettingsField(sec, QStringLiteral("Terminal font"), m_settingsFontFamily);
-        addSettingsField(sec, QStringLiteral("Terminal font size"), m_settingsFontSize);
-        addSettingsField(sec, QStringLiteral("Terminal text color"), m_settingsTermFgBtn);
-        addSettingsField(sec, QStringLiteral("Terminal background"), m_settingsTermBgBtn);
-        addSettingsField(sec, QStringLiteral("Terminal background image"), m_settingsTermBgImage);
-        addSettingsField(sec, QStringLiteral(""), m_settingsTermBgImageBtn);
-        addSettingsField(sec, QStringLiteral("Image opacity"), m_settingsTermBgOpacity);
-        addSettingsField(sec, QStringLiteral("Image blur radius"), m_settingsTermBgBlur);
-
-        auto* uiPreview = new QLabel(QStringLiteral("UI preview: Hosts · Settings · Connect"), sec);
-        uiPreview->setObjectName(QStringLiteral("settingsFontPreview"));
-        m_settingsTermPreview = new QLabel(QStringLiteral("Terminal preview: Abc 123 → ~/src $"), sec);
+        m_settingsTermPreview = new QLabel(QStringLiteral("Abc 123 → ~/src $"), sec);
         m_settingsTermPreview->setObjectName(QStringLiteral("settingsTermPreview"));
         m_settingsTermPreview->setContentsMargins(8, 8, 8, 8);
+        secLay->addSpacing(4);
+        secLay->addWidget(m_settingsTermPreview);
 
         m_settingsFontStatus = new QLabel(QStringLiteral(""), sec);
         m_settingsFontStatus->setObjectName(QStringLiteral("dashHint"));
         m_settingsFontStatus->setWordWrap(true);
+        secLay->addWidget(m_settingsFontStatus);
+
+        // ---- Highlighting ----
+        addSubsection(QStringLiteral("Syntax highlighting"), true);
 
         m_settingsHighlightAddresses = new QCheckBox(QStringLiteral("Colorize IP and MAC addresses"), sec);
         m_settingsHighlightKeywords = new QCheckBox(
@@ -1031,17 +1109,14 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
         m_settingsHighlightAddresses->setChecked(AppSettings::highlightAddresses());
         m_settingsHighlightKeywords->setChecked(AppSettings::highlightLogKeywords());
         m_settingsHighlightCiscoCli->setChecked(AppSettings::highlightCiscoCli());
-
-        secLay->addWidget(uiPreview);
-        secLay->addWidget(m_settingsTermPreview);
-        secLay->addWidget(m_settingsFontStatus);
-        secLay->addSpacing(8);
         secLay->addWidget(m_settingsHighlightAddresses);
         secLay->addWidget(m_settingsHighlightKeywords);
         secLay->addWidget(m_settingsHighlightCiscoCli);
-        secLay->addSpacing(8);
+
+        secLay->addSpacing(10);
         auto* resetAppearanceBtn = new QPushButton(QStringLiteral("Reset appearance to defaults"), sec);
         resetAppearanceBtn->setObjectName(QStringLiteral("dashSecondary"));
+        resetAppearanceBtn->setMaximumWidth(240);
         connect(resetAppearanceBtn, &QPushButton::clicked, this, [this]() {
             AppSettings::resetTerminalAppearance();
             loadSettingsUi();
@@ -2065,6 +2140,8 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
             return;
         }
         if (!on) {
+            m_deferredSyncKey.clear();
+            m_deferredSyncToken.clear();
             m_sync->setPaused(true);
             syncRefreshUiFromSyncState();
             return;
@@ -2083,6 +2160,8 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
                 }
                 if (!token.isEmpty()) {
                     m_syncTokenEdit->setText(token);
+                    m_deferredSyncKey.clear();
+                    m_deferredSyncToken.clear();
                     m_sync->restoreExisting(keyText, token);
                 }
             }
@@ -2189,11 +2268,11 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     loadSettingsUi();
     m_navHosts->setChecked(true);
     setNavPage(NavPage::Hosts);
-    refresh();
+    // Profiles were loaded once in the constructor — rebuild UI without re-reading the vault.
+    rebuildLists();
 
-    for (QAbstractButton* button : findChildren<QAbstractButton*>()) {
-        button->setCursor(Qt::PointingHandCursor);
-    }
+    // Sync network restore after the rest of startup (MainWindow finish + first show) settles.
+    QTimer::singleShot(0, this, &DashboardPage::startDeferredSyncRestore);
 }
 
 QToolButton* DashboardPage::makeNavButton(const QString& iconPath, const QString& text, QWidget* parent)
@@ -2750,14 +2829,19 @@ void DashboardPage::appendLog(const QString& line)
     m_logsView->appendPlainText(QStringLiteral("[%1] %2").arg(stamp, line));
 }
 
-void DashboardPage::refresh()
+void DashboardPage::rebuildLists()
 {
-    m_profiles = loadProfiles();
     rebuildSavedList();
     rebuildActiveList();
     if (m_currentNav == NavPage::Keychain) {
         rebuildKeychainList();
     }
+}
+
+void DashboardPage::refresh()
+{
+    m_profiles = loadProfiles();
+    rebuildLists();
 }
 
 void DashboardPage::showHome()
@@ -4868,12 +4952,16 @@ void DashboardPage::applyStoredSyncState()
 
     const QString keyText = SyncConfig::syncKeyText();
     if (keyText.isEmpty() || !m_sync) {
+        m_deferredSyncKey.clear();
+        m_deferredSyncToken.clear();
         syncRefreshUiFromSyncState();
         return;
     }
 
     SyncKey key = SyncKeyCodec::decode(keyText);
     if (!key.isValid()) {
+        m_deferredSyncKey.clear();
+        m_deferredSyncToken.clear();
         syncRefreshUiFromSyncState();
         return;
     }
@@ -4888,9 +4976,32 @@ void DashboardPage::applyStoredSyncState()
         m_syncTokenEdit->setText(token);
     }
     syncRefreshUiFromSyncState();
+    // Network restore is deferred via startDeferredSyncRestore() so it does not
+    // compete with vault load, theme, and first paint.
     if (SyncConfig::enabled() && !token.isEmpty()) {
-        m_sync->restoreExisting(keyText, token);
+        m_deferredSyncKey = keyText;
+        m_deferredSyncToken = token;
+    } else {
+        m_deferredSyncKey.clear();
+        m_deferredSyncToken.clear();
     }
+}
+
+void DashboardPage::startDeferredSyncRestore()
+{
+    if (!m_sync || m_deferredSyncKey.isEmpty() || m_deferredSyncToken.isEmpty()) {
+        return;
+    }
+    if (!SyncConfig::enabled()) {
+        m_deferredSyncKey.clear();
+        m_deferredSyncToken.clear();
+        return;
+    }
+    const QString keyText = m_deferredSyncKey;
+    const QString token = m_deferredSyncToken;
+    m_deferredSyncKey.clear();
+    m_deferredSyncToken.clear();
+    m_sync->restoreExisting(keyText, token);
 }
 
 void DashboardPage::syncRefreshUiFromSyncState()
