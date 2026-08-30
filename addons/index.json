@@ -1,7 +1,7 @@
 {
   "format": 1,
-  "updated": "2026-08-26",
-  "notes": "Official clientosh addon catalog. Artifact ABI must match clientoshAddonAbi() (e.g. qt6.9-win64-mingw).",
+  "updated": "2026-08-30",
+  "notes": "Official clientosh addon catalog. Artifact ABI must match clientoshAddonAbi() (qtX.Y-win64-mingw / qtX.Y-linux-x64 / qtX.Y-macos).",
   "addons": [
     {
       "id": "ai-agent",

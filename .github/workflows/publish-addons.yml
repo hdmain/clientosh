@@ -1,0 +1,194 @@
+name: Publish addon packages
+
+# Builds the AI agent plugin on Windows / Linux / macOS, copies binaries into
+# addons/packages/, regenerates addons/index.json, and commits when changed.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "src/addons/**"
+      - "src/core/addons/**"
+      - "cmake/bundle_ai_agent_addon.cmake"
+      - "cmake/ai_agent_index.json.in"
+      - "tools/regen_addons_index.py"
+      - ".github/workflows/publish-addons.yml"
+      - "CMakeLists.txt"
+
+concurrency:
+  group: publish-addons-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            shell: msys2 {0}
+            build_dir: build-win
+            msys2: true
+          - name: linux
+            os: ubuntu-22.04
+            shell: bash
+            build_dir: build-linux
+          - name: macos
+            os: macos-latest
+            shell: bash
+            build_dir: build-macos
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev \
+            libgl1-mesa-dev libegl1-mesa-dev
+
+      - name: Install deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install qt libssh openssl@3
+
+      - name: Install MSYS2
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-libssh
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-python
+
+      - name: Install pinned Qt 6.9.2 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $QtRoot = Join-Path $env:RUNNER_TEMP 'Qt'
+          python -m pip install --upgrade aqtinstall
+          python -m aqt install-qt windows desktop 6.9.2 win64_mingw -O $QtRoot
+          python -m aqt install-tool windows desktop tools_mingw1310 qt.tools.win64_mingw1310 -O $QtRoot
+          $qtPrefix = "$QtRoot\6.9.2\mingw_64"
+          $mingwRoot = "$QtRoot\Tools\mingw1310_64"
+          "QT_ROOT=$qtPrefix" >> $env:GITHUB_ENV
+          "MINGW_ROOT=$mingwRoot" >> $env:GITHUB_ENV
+
+      - name: Configure & build addon
+        run: |
+          set -e
+          EXTRA=()
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            EXTRA+=(
+              -G Ninja
+              -DCMAKE_PREFIX_PATH="$QT_ROOT"
+              -DCMAKE_C_COMPILER="$MINGW_ROOT/bin/gcc.exe"
+              -DCMAKE_CXX_COMPILER="$MINGW_ROOT/bin/g++.exe"
+            )
+          fi
+          cmake -S . -B "${{ matrix.build_dir }}" -DCMAKE_BUILD_TYPE=Release "${EXTRA[@]}"
+          cmake --build "${{ matrix.build_dir }}" --target clientosh_addon_ai_agent -j 4
+          test -f "${{ matrix.build_dir }}/addons-bundle/index.json"
+
+      - name: Stage plugin for catalog
+        run: |
+          set -e
+          BUNDLE="${{ matrix.build_dir }}/addons-bundle"
+          ABI=$(python3 - "$BUNDLE/index.json" <<'PY'
+          import json, pathlib, sys
+          data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(data["addons"][0]["artifacts"][0]["abi"])
+          PY
+          )
+          PLUGIN=$(find "$BUNDLE/ai-agent" -maxdepth 1 -type f | head -1)
+          test -n "$PLUGIN"
+          NAME=$(basename "$PLUGIN")
+          STAGE="staged/$ABI"
+          mkdir -p "$STAGE"
+          cp "$PLUGIN" "$STAGE/$NAME"
+          python3 - "$STAGE/$NAME" "$ABI" "$NAME" <<'PY'
+          import hashlib, json, pathlib, sys
+          p = pathlib.Path(sys.argv[1])
+          abi, name = sys.argv[2], sys.argv[3]
+          h = hashlib.sha256(p.read_bytes()).hexdigest()
+          meta = {"abi": abi, "file": name, "sha256": h, "size": p.stat().st_size}
+          pathlib.Path(p.parent / "meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+          print(meta)
+          PY
+
+      - name: Upload staged plugin
+        uses: actions/upload-artifact@v7
+        with:
+          name: addon-ai-agent-${{ matrix.name }}
+          path: staged/**
+          if-no-files-found: error
+
+  commit-catalog:
+    name: Update addons/packages + index.json
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all platform plugins
+        uses: actions/download-artifact@v7
+        with:
+          path: _addon_artifacts
+          pattern: addon-ai-agent-*
+          merge-multiple: false
+
+      - name: Install into addons/packages
+        run: |
+          set -e
+          shopt -s nullglob
+          for dir in _addon_artifacts/addon-ai-agent-*; do
+            for abi_dir in "$dir"/*; do
+              [ -d "$abi_dir" ] || continue
+              abi=$(basename "$abi_dir")
+              meta="$abi_dir/meta.json"
+              test -f "$meta"
+              file=$(python3 -c "import json; print(json.load(open('$meta'))['file'])")
+              dest="addons/packages/ai-agent/$abi"
+              mkdir -p "$dest"
+              # Drop previous plugin binaries for this ABI (keep folder clean).
+              find "$dest" -maxdepth 1 -type f \( -name '*.dll' -o -name '*.so' -o -name '*.dylib' \) -delete
+              cp "$abi_dir/$file" "$dest/$file"
+              echo "Installed $dest/$file"
+            done
+          done
+          python3 tools/regen_addons_index.py
+          cat addons/index.json
+
+      - name: Commit catalog if changed
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add addons/packages addons/index.json
+          if git diff --cached --quiet; then
+            echo "No catalog changes."
+            exit 0
+          fi
+          git commit -m "chore(addons): publish AI agent packages for all platforms"
+          git push

@@ -304,6 +304,14 @@ set_target_properties(clientosh_addon_ai_agent PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
+# Stable plugin names for the addon catalog (QPluginLoader loads these on each OS).
+if(WIN32)
+    set_target_properties(clientosh_addon_ai_agent PROPERTIES SUFFIX ".dll")
+elseif(APPLE)
+    set_target_properties(clientosh_addon_ai_agent PROPERTIES SUFFIX ".dylib")
+else()
+    set_target_properties(clientosh_addon_ai_agent PROPERTIES SUFFIX ".so")
+endif()
 add_dependencies(clientosh clientosh_addon_ai_agent)
 
 add_custom_command(TARGET clientosh_addon_ai_agent POST_BUILD
@@ -527,6 +535,12 @@ if(UNIX AND NOT APPLE)
     )
 endif()
 
+# First-party addons shipped with the app (Settings → Addons catalog fallback).
+# Built next to the executable; also installed under share/ for FHS Linux packages.
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/addons-bundle/"
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/clientosh/addons-bundle
+    OPTIONAL
+)
 # ---- CPack (.deb on Linux) ----
 set(CPACK_PACKAGE_NAME "clientosh")
 set(CPACK_PACKAGE_VENDOR "clientosh")

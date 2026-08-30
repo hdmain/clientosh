@@ -44,7 +44,29 @@ QString AddonStore::addonDir(const QString& addonId)
 
 QString AddonStore::bundledAddonsRoot()
 {
-    return QCoreApplication::applicationDirPath() + QStringLiteral("/addons-bundle");
+    const QString besideExe =
+        QCoreApplication::applicationDirPath() + QStringLiteral("/addons-bundle");
+    if (QFileInfo::exists(besideExe + QStringLiteral("/index.json"))) {
+        return besideExe;
+    }
+
+    // FHS install: /usr/bin/clientosh → /usr/share/clientosh/addons-bundle
+    const QString share = QDir(QCoreApplication::applicationDirPath()
+                               + QStringLiteral("/../share/clientosh/addons-bundle"))
+                              .absolutePath();
+    if (QFileInfo::exists(share + QStringLiteral("/index.json"))) {
+        return share;
+    }
+
+    // macOS app bundle alternate: Contents/Resources/addons-bundle
+    const QString resources = QDir(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/../Resources/addons-bundle"))
+                                  .absolutePath();
+    if (QFileInfo::exists(resources + QStringLiteral("/index.json"))) {
+        return resources;
+    }
+
+    return besideExe;
 }
 
 QVector<AddonInstallRecord> AddonStore::installed() const

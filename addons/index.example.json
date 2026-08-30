@@ -1,7 +1,7 @@
 {
   "format": 1,
-  "updated": "2026-08-26",
-  "notes": "Example catalog shape. The live catalog is addons/index.json in this repository.",
+  "updated": "2026-08-30",
+  "notes": "Example catalog shape. Live catalog: addons/index.json. ABI tags: qtX.Y-win64-mingw, qtX.Y-linux-x64, qtX.Y-macos.",
   "addons": [
     {
       "id": "ai-agent",
@@ -14,8 +14,20 @@
         {
           "abi": "qt6.9-win64-mingw",
           "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.9-win64-mingw/ai_agent.dll",
-          "sha256": "a329139ce8a87f7db2e7ad688dc667b61fe97f7738e9f83c9b4def1e06bf1fe4",
-          "size": 292185
+          "sha256": "REPLACE_WITH_SHA256",
+          "size": 0
+        },
+        {
+          "abi": "qt6.2-linux-x64",
+          "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.2-linux-x64/ai_agent.so",
+          "sha256": "REPLACE_WITH_SHA256",
+          "size": 0
+        },
+        {
+          "abi": "qt6.8-macos",
+          "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.8-macos/ai_agent.dylib",
+          "sha256": "REPLACE_WITH_SHA256",
+          "size": 0
         }
       ]
     }

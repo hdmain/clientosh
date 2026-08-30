@@ -86,6 +86,11 @@ Source: "{#BuildDir}\iconengines\*.dll";                    DestDir: "{app}\icon
 Source: "{#BuildDir}\generic\*.dll";                        DestDir: "{app}\generic";      Flags: ignoreversion
 #endif
 
+; Bundled first-party addons (AI agent, etc.) — installable offline from Settings
+#if DirExists("{#BuildDir}\addons-bundle")
+Source: "{#BuildDir}\addons-bundle\*"; DestDir: "{app}\addons-bundle"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
+
 [Icons]
 Name: "{group}\{#AppName}";          Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\clientosh.ico"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}";     IconFilename: "{app}\clientosh.ico"

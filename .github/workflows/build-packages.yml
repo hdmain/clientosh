@@ -208,6 +208,14 @@ jobs:
           cp packaging/clientosh.desktop AppDir-clientosh/usr/share/applications/clientosh.desktop
           convert icons/terminal.svg \
             AppDir-clientosh/usr/share/icons/hicolor/256x256/apps/clientosh.png
+          if [ -d build-linux/addons-bundle ]; then
+            mkdir -p AppDir-clientosh/usr/share/clientosh
+            cp -a build-linux/addons-bundle \
+              AppDir-clientosh/usr/share/clientosh/addons-bundle
+            mkdir -p AppDir-clientosh/usr/bin/addons-bundle
+            cp -a build-linux/addons-bundle/. \
+              AppDir-clientosh/usr/bin/addons-bundle/
+          fi
           export LDAI_OUTPUT_DIR="$PWD"
           export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
           export QTDIR=/usr/lib/x86_64-linux-gnu
@@ -346,6 +354,9 @@ jobs:
           app=build-macos/clientosh.app
           mkdir -p "$app/Contents/MacOS"
           cp build-macos/clientosh "$app/Contents/MacOS/clientosh"
+          if [ -d build-macos/addons-bundle ]; then
+            cp -R build-macos/addons-bundle "$app/Contents/MacOS/addons-bundle"
+          fi
           cat > "$app/Contents/Info.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

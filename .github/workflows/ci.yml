@@ -83,19 +83,25 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           test -x ${{ matrix.build_dir }}/clientosh
-          echo "clientosh built successfully"
+          test -f ${{ matrix.build_dir }}/addons-bundle/index.json
+          test -n "$(find ${{ matrix.build_dir }}/addons-bundle/ai-agent -maxdepth 1 -type f | head -1)"
+          echo "clientosh + addons-bundle built successfully"
 
       - name: Smoke test (macOS)
         if: runner.os == 'macOS'
         run: |
           test -x ${{ matrix.build_dir }}/clientosh
-          echo "clientosh built successfully"
+          test -f ${{ matrix.build_dir }}/addons-bundle/index.json
+          test -n "$(find ${{ matrix.build_dir }}/addons-bundle/ai-agent -maxdepth 1 -type f | head -1)"
+          echo "clientosh + addons-bundle built successfully"
 
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         run: |
           test -x ${{ matrix.build_dir }}/clientosh.exe
-          echo "clientosh.exe built successfully"
+          test -f ${{ matrix.build_dir }}/addons-bundle/index.json
+          test -n "$(find ${{ matrix.build_dir }}/addons-bundle/ai-agent -maxdepth 1 -type f | head -1)"
+          echo "clientosh.exe + addons-bundle built successfully"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
