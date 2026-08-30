@@ -44,5 +44,11 @@ int main()
     assert(decoded.profiles.front().authMethod == AuthMethod::SshAgent);
     assert(decoded.keys.size() == 1);
     assert(decoded.keys.front().fingerprint == QStringLiteral("SHA256:test"));
+
+    payload.notesMarkdown = QStringLiteral("# Hello\n\n||secret||");
+    const SyncPayload decodedNotes =
+        SyncPayloadCodec::fromJson(SyncPayloadCodec::toJson(payload), &ok);
+    assert(ok);
+    assert(decodedNotes.notesMarkdown.contains(QStringLiteral("||secret||")));
     return 0;
 }

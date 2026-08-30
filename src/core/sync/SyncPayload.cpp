@@ -117,6 +117,7 @@ QByteArray toJson(const SyncPayload& payload)
         keyArr.append(keyToJsonFull(k));
     }
     root.insert(QStringLiteral("keys"), keyArr);
+    root.insert(QStringLiteral("notesMarkdown"), payload.notesMarkdown);
 
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
@@ -156,6 +157,8 @@ SyncPayload fromJson(const QByteArray& bytes, bool* okOut)
     for (const QJsonValue& v : keyArr) {
         payload.keys.append(keyFromJsonFull(v.toObject()));
     }
+
+    payload.notesMarkdown = root.value(QStringLiteral("notesMarkdown")).toString();
 
     if (okOut) {
         *okOut = true;

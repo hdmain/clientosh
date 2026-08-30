@@ -424,6 +424,9 @@ void MainWindow::showEvent(QShowEvent* event)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    if (m_dashboard) {
+        m_dashboard->flushNotesOnExit();
+    }
     const auto sftpPanes = m_sftpPanes;
     for (auto it = sftpPanes.begin(); it != sftpPanes.end(); ++it) {
         if (it.value()) {
@@ -1071,6 +1074,13 @@ void MainWindow::applyTheme()
         "  font-family: monospace;"
         "  font-size: 11px;"
         "  padding: 6px;"
+        "}"
+        "QTextEdit#dashNotes {"
+        "  background: {{surfaceBg}};"
+        "  color: {{text}};"
+        "  border: 1px solid {{border}};"
+        "  font-size: 13px;"
+        "  padding: 10px;"
         "}"
         "QWidget#splitHost { background: {{windowBg}}; }"
         "QFrame#paneFrame { background: {{windowBg}}; border: none; }"

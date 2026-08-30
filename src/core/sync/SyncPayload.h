@@ -31,6 +31,7 @@ struct SyncPayload
 
     QVector<SessionProfile> profiles;
     QVector<StoredKey> keys;     // reusable private keyring entries (with PEM)
+    QString notesMarkdown;       // Notes tab body (HTML; legacy Markdown accepted)
 };
 
 namespace SyncPayloadCodec {

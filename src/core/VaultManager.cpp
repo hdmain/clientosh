@@ -271,6 +271,7 @@ bool VaultManager::removeSecret(const QString& profileId, const QString& field)
 namespace {
 // Reserved top-level key in the dbvault object holding the reusable keys map.
 constexpr const char* kStoredKeysNode = "__stored_keys__";
+constexpr const char* kNotesNode = "__notes__";
 } // namespace
 
 bool VaultManager::storeStoredKey(const StoredKey& key)
@@ -405,4 +406,34 @@ bool VaultManager::removeStoredKeyPassphrase(const QString& id)
 {
     return id.trimmed().isEmpty()
         || removeSecret(storedKeySecretId(id), QStringLiteral("passphrase"));
+}
+
+bool VaultManager::storeNotesMarkdown(const QString& markdown)
+{
+    if (!ensureDbKey()) {
+        return false;
+    }
+    if (!m_dbLoaded && !readDbvault()) {
+        return false;
+    }
+    QJsonObject notes;
+    notes.insert(QStringLiteral("markdown"), markdown);
+    m_dbvault.insert(QLatin1String(kNotesNode), notes);
+    m_dbLoaded = true;
+    return persistDbvault();
+}
+
+QString VaultManager::retrieveNotesMarkdown()
+{
+    if (!ensureDbKey()) {
+        return {};
+    }
+    if (!m_dbLoaded && !readDbvault()) {
+        return {};
+    }
+    const QJsonValue v = m_dbvault.value(QLatin1String(kNotesNode));
+    if (!v.isObject()) {
+        return {};
+    }
+    return v.toObject().value(QStringLiteral("markdown")).toString();
 }

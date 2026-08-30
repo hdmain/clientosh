@@ -179,6 +179,12 @@ SyncPayload mergeSnapshots(const SyncPayload& local, const SyncPayload& remote)
         }
     }
 
+    // Notes: remote wins when present; otherwise keep local notebook.
+    if (combined.notesMarkdown.trimmed().isEmpty()
+        && !local.notesMarkdown.trimmed().isEmpty()) {
+        combined.notesMarkdown = local.notesMarkdown;
+    }
+
     return dedupePayload(combined);
 }
 } // namespace
@@ -596,7 +602,8 @@ void SyncController::onPullFinished(bool ok, bool notFound, const QString& body,
         startPollTimer();
         emit statusMessage(QStringLiteral("Connected to an existing sync."));
         const SyncPayload local = currentLocalPayload();
-        if (!local.profiles.isEmpty() || !local.keys.isEmpty()) {
+        if (!local.profiles.isEmpty() || !local.keys.isEmpty()
+            || !local.notesMarkdown.trimmed().isEmpty()) {
             m_pushQueued = true;
         }
     } else if (m_state == State::Connecting) {
@@ -632,9 +639,11 @@ SyncPayload SyncController::currentLocalPayload() const
 void SyncController::reconcileFromRemote(const SyncPayload& remote, bool joining)
 {
     const bool remoteEmpty = remote.profiles.isEmpty() && remote.keys.isEmpty()
+        && remote.notesMarkdown.trimmed().isEmpty()
         && (remote.deviceId.isEmpty() || remote.rev <= 1);
     const SyncPayload local = currentLocalPayload();
-    const bool localHasData = !local.profiles.isEmpty() || !local.keys.isEmpty();
+    const bool localHasData = !local.profiles.isEmpty() || !local.keys.isEmpty()
+        || !local.notesMarkdown.trimmed().isEmpty();
 
     // Never adopt an empty/placeholder gist over existing local sessions.
     if (remoteEmpty && localHasData) {
@@ -646,7 +655,9 @@ void SyncController::reconcileFromRemote(const SyncPayload& remote, bool joining
         // another device — fall through and apply it.
     }
 
-    if (joining && localHasData && (!remote.profiles.isEmpty() || !remote.keys.isEmpty())) {
+    if (joining && localHasData
+        && (!remote.profiles.isEmpty() || !remote.keys.isEmpty()
+            || !remote.notesMarkdown.trimmed().isEmpty())) {
         SyncPayload merged = mergeSnapshots(local, remote);
         merged.rev = std::max(remote.rev, m_lastKnownRev);
         merged.timestampMs = std::max(remote.timestampMs, local.timestampMs);

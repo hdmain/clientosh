@@ -25,6 +25,9 @@
     <file>icons/always-on-top.svg</file>
     <file>icons/ai-agent.svg</file>
     <file>icons/logs.svg</file>
+    <file>icons/notes.svg</file>
+    <file>icons/notes-saved.svg</file>
+    <file>icons/notes-saving.svg</file>
     <file>icons/hosts.svg</file>
     <file>icons/up.svg</file>
     <file>icons/check-white.svg</file>

@@ -17,6 +17,7 @@
 #include "core/UpdateCheck.h"
 #include "ui/Motion.h"
 #include "ui/PasswordReveal.h"
+#include "ui/NotesMarkdown.h"
 
 #include <libssh/libssh.h>
 
@@ -73,6 +74,9 @@
 #include <QStyledItemDelegate>
 #include <QStyle>
 #include <QTableWidget>
+#include <QTextCursor>
+#include <QTextEdit>
+#include <QTextList>
 #include <QToolButton>
 #include <QTimer>
 #include <QUrl>
@@ -604,11 +608,13 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
 
     m_navHosts = makeSidebarNav(QStringLiteral(":/icons/hosts.svg"), QStringLiteral("Hosts"), m_sidebar);
     m_navKeys = makeSidebarNav(QStringLiteral(":/icons/key.svg"), QStringLiteral("SSH Keys"), m_sidebar);
+    m_navNotes = makeSidebarNav(QStringLiteral(":/icons/notes.svg"), QStringLiteral("Notes"), m_sidebar);
     m_navLogs = makeSidebarNav(QStringLiteral(":/icons/logs.svg"), QStringLiteral("Logs"), m_sidebar);
     m_navSettings = makeSidebarNav(QStringLiteral(":/icons/settings.svg"), QStringLiteral("Settings"), m_sidebar);
 
     m_navGroup->addButton(m_navHosts, static_cast<int>(NavPage::Hosts));
     m_navGroup->addButton(m_navKeys, static_cast<int>(NavPage::Keychain));
+    m_navGroup->addButton(m_navNotes, static_cast<int>(NavPage::Notes));
     m_navGroup->addButton(m_navLogs, static_cast<int>(NavPage::Logs));
     m_navGroup->addButton(m_navSettings, static_cast<int>(NavPage::Settings));
 
@@ -629,6 +635,7 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     sideLay->addSpacing(6);
 
     sideLay->addWidget(m_navKeys);
+    sideLay->addWidget(m_navNotes);
     sideLay->addWidget(m_navLogs);
     sideLay->addStretch(1);
     sideLay->addWidget(m_navSettings);
@@ -863,6 +870,48 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     m_keysStatus->setObjectName(QStringLiteral("dashHint"));
     keysLay->addWidget(m_keysStatus);
     m_stack->addWidget(m_keysPage);
+
+    // ---- Notes page (Markdown notebook in vault + GH sync) ----
+    m_notesPage = new QWidget;
+    auto* notesLay = new QVBoxLayout(m_notesPage);
+    notesLay->setContentsMargins(16, 12, 16, 10);
+    notesLay->setSpacing(6);
+
+    auto* notesToolbar = new QWidget(m_notesPage);
+    auto* notesToolbarLay = new QHBoxLayout(notesToolbar);
+    notesToolbarLay->setContentsMargins(0, 0, 0, 0);
+    notesToolbarLay->setSpacing(0);
+    notesToolbarLay->addStretch(1);
+    m_notesSaveIcon = new QLabel(notesToolbar);
+    m_notesSaveIcon->setFixedSize(18, 18);
+    m_notesSaveIcon->setScaledContents(true);
+    m_notesSaveIcon->setToolTip(QStringLiteral("Saved"));
+    notesToolbarLay->addWidget(m_notesSaveIcon);
+    notesLay->addWidget(notesToolbar);
+
+    m_notesEdit = new QTextEdit(m_notesPage);
+    m_notesEdit->setObjectName(QStringLiteral("dashNotes"));
+    m_notesEdit->setAcceptRichText(true);
+    m_notesEdit->setPlaceholderText(QStringLiteral("Write a note…"));
+    m_notesEdit->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_notesEdit->viewport()->installEventFilter(this);
+    notesLay->addWidget(m_notesEdit, 1);
+    m_stack->addWidget(m_notesPage);
+
+    setNotesSavingState(false);
+
+    m_notesSaveDebounce = new QTimer(this);
+    m_notesSaveDebounce->setSingleShot(true);
+    m_notesSaveDebounce->setInterval(800);
+    connect(m_notesSaveDebounce, &QTimer::timeout, this, &DashboardPage::saveNotesToVault);
+    connect(m_notesEdit, &QTextEdit::textChanged, this, [this]() {
+        setNotesSavingState(true);
+        if (m_notesSaveDebounce) {
+            m_notesSaveDebounce->start();
+        }
+    });
+    connect(m_notesEdit, &QWidget::customContextMenuRequested, this,
+            &DashboardPage::showNotesContextMenu);
 
     // ---- Logs page ----
     m_logsPage = new QWidget;
@@ -2163,6 +2212,8 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
             SyncPayload p;
             p.profiles = m_profiles;
             p.keys = fullKeys;
+            flushNotesToVault(false);
+            p.notesMarkdown = VaultManager().retrieveNotesMarkdown();
             // Let the controller frame rev/timestamp/device
             return SyncPayloadCodec::toJson(p);
         },
@@ -2173,7 +2224,7 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
             if (!ok) {
                 return false;
             }
-            // Persist sessions + keyring
+            // Persist sessions + keyring + notes
             if (!saveProfiles(p.profiles)) {
                 return false;
             }
@@ -2183,9 +2234,18 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
                     return false;
                 }
             }
+            if (!v.storeNotesMarkdown(p.notesMarkdown)) {
+                return false;
+            }
             m_profiles = p.profiles;
             rebuildSavedList();
             rebuildKeychainList();
+            if (m_currentNav == NavPage::Notes) {
+                loadNotesFromVault(true);
+            } else {
+                m_notesHydrated = false;
+                m_notesLoadedMarkdown = p.notesMarkdown;
+            }
             appendLog(QStringLiteral("sync: applied %1 profiles from remote").arg(p.profiles.size()));
             return true;
         });
@@ -2842,6 +2902,10 @@ void DashboardPage::updateTopBar()
         m_pageTitle->setText(QStringLiteral("SSH Keys"));
         m_pageSub->setText(QStringLiteral("stored keys and SSH agent status"));
         break;
+    case NavPage::Notes:
+        m_pageTitle->setText(QStringLiteral("Notes"));
+        m_pageSub->setText(QStringLiteral("encrypted notebook · synced with GH Sync"));
+        break;
     case NavPage::Logs:
         m_pageTitle->setText(QStringLiteral("Logs"));
         m_pageSub->setText(QStringLiteral("recent session events"));
@@ -2859,6 +2923,9 @@ void DashboardPage::updateTopBar()
 
 void DashboardPage::setNavPage(NavPage page)
 {
+    if (m_currentNav == NavPage::Notes && page != NavPage::Notes) {
+        flushNotesToVault(true);
+    }
     m_currentNav = page;
     switch (page) {
     case NavPage::Hosts:
@@ -2870,6 +2937,11 @@ void DashboardPage::setNavPage(NavPage page)
         rebuildKeychainList();
         m_stack->setCurrentWidget(m_keysPage);
         m_navKeys->setChecked(true);
+        break;
+    case NavPage::Notes:
+        loadNotesFromVault(false);
+        m_stack->setCurrentWidget(m_notesPage);
+        m_navNotes->setChecked(true);
         break;
     case NavPage::Logs:
         m_stack->setCurrentWidget(m_logsPage);
@@ -5476,6 +5548,212 @@ void DashboardPage::syncTestToken()
     }
     m_syncTokenStatusLabel->setText(QStringLiteral("Checking token…"));
     m_sync->testToken(token);
+}
+
+void DashboardPage::loadNotesFromVault(bool force)
+{
+    if (!m_notesEdit) {
+        return;
+    }
+    const QString md = VaultManager().retrieveNotesMarkdown();
+    // Keep the live rich-text document across tab switches. Re-parsing Markdown
+    // on every visit reorders blocks / loses local layout.
+    if (!force && m_notesHydrated && md == m_notesLoadedMarkdown) {
+        setNotesSavingState(false);
+        return;
+    }
+    m_notesLoadedMarkdown = md;
+    {
+        const QSignalBlocker block(m_notesEdit);
+        NotesMarkdown::applyMarkdown(m_notesEdit, md);
+    }
+    m_notesHydrated = true;
+    setNotesSavingState(false);
+}
+
+void DashboardPage::flushNotesToVault(bool triggerSync)
+{
+    if (!m_notesEdit || !m_notesHydrated) {
+        return;
+    }
+    if (m_notesSaveDebounce) {
+        m_notesSaveDebounce->stop();
+    }
+    const QString md = NotesMarkdown::toMarkdown(m_notesEdit);
+    if (md == m_notesLoadedMarkdown) {
+        setNotesSavingState(false);
+        return;
+    }
+    if (!VaultManager().storeNotesMarkdown(md)) {
+        setNotesSavingState(true);
+        if (m_notesSaveIcon) {
+            m_notesSaveIcon->setToolTip(QStringLiteral("Failed to save"));
+        }
+        return;
+    }
+    m_notesLoadedMarkdown = md;
+    setNotesSavingState(false);
+    if (triggerSync) {
+        syncPushNow();
+    }
+}
+
+void DashboardPage::saveNotesToVault()
+{
+    flushNotesToVault(true);
+}
+
+void DashboardPage::flushNotesOnExit()
+{
+    flushNotesToVault(false);
+}
+
+void DashboardPage::setNotesSavingState(bool saving)
+{
+    if (!m_notesSaveIcon) {
+        return;
+    }
+    if (saving) {
+        m_notesSaveIcon->setPixmap(
+            QIcon(QStringLiteral(":/icons/notes-saving.svg")).pixmap(18, 18));
+        m_notesSaveIcon->setToolTip(QStringLiteral("Saving…"));
+    } else {
+        m_notesSaveIcon->setPixmap(
+            QIcon(QStringLiteral(":/icons/notes-saved.svg")).pixmap(18, 18));
+        m_notesSaveIcon->setToolTip(QStringLiteral("Saved"));
+    }
+}
+
+void DashboardPage::applyNotesCharFormat(const QTextCharFormat& format)
+{
+    if (!m_notesEdit) {
+        return;
+    }
+    QTextCursor cursor = m_notesEdit->textCursor();
+    if (!cursor.hasSelection()) {
+        QTextCharFormat merged = cursor.charFormat();
+        merged.merge(format);
+        m_notesEdit->setCurrentCharFormat(merged);
+    } else {
+        cursor.mergeCharFormat(format);
+        m_notesEdit->setTextCursor(cursor);
+    }
+    m_notesEdit->setFocus();
+}
+
+void DashboardPage::applyNotesHeading(int level)
+{
+    if (!m_notesEdit) {
+        return;
+    }
+    QTextCursor cursor = m_notesEdit->textCursor();
+    QTextBlockFormat block = cursor.blockFormat();
+    block.setHeadingLevel(level);
+    cursor.mergeBlockFormat(block);
+    if (level > 0) {
+        QTextCharFormat chars;
+        chars.setFontWeight(QFont::Bold);
+        chars.setFontPointSize(qMax(11.0, 18.0 - (level - 1) * 2.0));
+        cursor.select(QTextCursor::BlockUnderCursor);
+        cursor.mergeCharFormat(chars);
+    }
+    m_notesEdit->setTextCursor(cursor);
+    m_notesEdit->setFocus();
+}
+
+void DashboardPage::applyNotesList(QTextListFormat::Style style)
+{
+    if (!m_notesEdit) {
+        return;
+    }
+    QTextCursor cursor = m_notesEdit->textCursor();
+    QTextListFormat listFmt;
+    listFmt.setStyle(style);
+    cursor.createList(listFmt);
+    m_notesEdit->setFocus();
+}
+
+void DashboardPage::showNotesContextMenu(const QPoint& localPos)
+{
+    if (!m_notesEdit) {
+        return;
+    }
+    QMenu* menu = m_notesEdit->createStandardContextMenu();
+    menu->addSeparator();
+
+    auto* bold = menu->addAction(QStringLiteral("Bold"));
+    auto* italic = menu->addAction(QStringLiteral("Italic"));
+    auto* underline = menu->addAction(QStringLiteral("Underline"));
+    auto* strike = menu->addAction(QStringLiteral("Strikethrough"));
+    auto* spoiler = menu->addAction(QStringLiteral("Spoiler"));
+    menu->addSeparator();
+    auto* code = menu->addAction(QStringLiteral("Inline code"));
+    auto* heading = menu->addAction(QStringLiteral("Heading"));
+    auto* quote = menu->addAction(QStringLiteral("Quote"));
+    auto* bullet = menu->addAction(QStringLiteral("Bullet list"));
+
+    connect(bold, &QAction::triggered, this, [this]() {
+        QTextCharFormat fmt;
+        fmt.setFontWeight(QFont::Bold);
+        applyNotesCharFormat(fmt);
+    });
+    connect(italic, &QAction::triggered, this, [this]() {
+        QTextCharFormat fmt;
+        fmt.setFontItalic(true);
+        applyNotesCharFormat(fmt);
+    });
+    connect(underline, &QAction::triggered, this, [this]() {
+        QTextCharFormat fmt;
+        fmt.setFontUnderline(true);
+        applyNotesCharFormat(fmt);
+    });
+    connect(strike, &QAction::triggered, this, [this]() {
+        QTextCharFormat fmt;
+        fmt.setFontStrikeOut(true);
+        applyNotesCharFormat(fmt);
+    });
+    connect(spoiler, &QAction::triggered, this, [this]() {
+        NotesMarkdown::applySpoilerToSelection(m_notesEdit);
+        m_notesEdit->setFocus();
+    });
+    connect(code, &QAction::triggered, this, [this]() {
+        QTextCharFormat fmt;
+        fmt.setFontFamilies({QStringLiteral("Consolas"), QStringLiteral("monospace")});
+        fmt.setBackground(QColor(0x2a, 0x2a, 0x2a));
+        applyNotesCharFormat(fmt);
+    });
+    connect(heading, &QAction::triggered, this, [this]() { applyNotesHeading(1); });
+    connect(quote, &QAction::triggered, this, [this]() {
+        if (!m_notesEdit) {
+            return;
+        }
+        QTextCursor cursor = m_notesEdit->textCursor();
+        QTextBlockFormat block = cursor.blockFormat();
+        block.setLeftMargin(24);
+        block.setTopMargin(4);
+        block.setBottomMargin(4);
+        cursor.mergeBlockFormat(block);
+        m_notesEdit->setFocus();
+    });
+    connect(bullet, &QAction::triggered, this, [this]() {
+        applyNotesList(QTextListFormat::ListDisc);
+    });
+
+    menu->exec(m_notesEdit->mapToGlobal(localPos));
+    delete menu;
+}
+
+bool DashboardPage::eventFilter(QObject* watched, QEvent* event)
+{
+    if (m_notesEdit && watched == m_notesEdit->viewport()
+        && event->type() == QEvent::MouseButtonRelease) {
+        const auto* mouse = static_cast<QMouseEvent*>(event);
+        if (mouse->button() == Qt::LeftButton
+            && NotesMarkdown::toggleSpoilerAtCursor(m_notesEdit, mouse->position().toPoint())) {
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void DashboardPage::syncPushNow()

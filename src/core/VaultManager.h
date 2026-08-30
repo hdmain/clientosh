@@ -88,6 +88,12 @@ public:
     bool retrieveStoredKeyPassphrase(const QString& id, QByteArray& passphraseOut);
     bool removeStoredKeyPassphrase(const QString& id);
 
+    // ---- notes (global notebook, synced via GH sync) -------------------------
+    /** Persist the global notes document (HTML; legacy Markdown still readable). */
+    bool storeNotesMarkdown(const QString& markdown);
+    /** Load notes; returns empty string when absent. */
+    QString retrieveNotesMarkdown();
+
     // ---- diagnostics ---------------------------------------------------------
     /** true if the OS keyring path is active (vs the file-backed fallback). */
     bool usingNativeKeyring() const { return m_usingNative; }

@@ -8,7 +8,10 @@
 
 #include <QColor>
 #include <QHash>
+#include <QSet>
 #include <QStringList>
+#include <QTextCharFormat>
+#include <QTextListFormat>
 #include <QUrl>
 #include <QWidget>
 #include <QVector>
@@ -26,6 +29,7 @@ class QTreeWidget;
 class QMenu;
 class QListWidget;
 class QPlainTextEdit;
+class QTextEdit;
 class QButtonGroup;
 class QComboBox;
 class QSlider;
@@ -34,6 +38,7 @@ class QKeySequenceEdit;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QVBoxLayout;
+class QTimer;
 
 class DashboardPage : public QWidget
 {
@@ -57,6 +62,8 @@ public:
     void bindAddonHostContext(AddonHostContext* context);
     /** Insert/remove the AI agent settings category (null clears). */
     void setAiAgentSettingsPage(QWidget* page);
+    /** Persist Notes immediately (call on app exit). */
+    void flushNotesOnExit();
 
 signals:
     void openProfile(const SessionProfile& profile);
@@ -66,11 +73,15 @@ signals:
     void closeLiveSession(const QString& sessionId);
     void settingsApplied();
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     enum class NavPage {
         Hosts = 0,
         Active, // deprecated/unused: live sessions are surfaced via the "N live" badge
         Keychain,
+        Notes,
         Logs,
         Settings,
         Form
@@ -147,6 +158,14 @@ private:
     void updateConnectionModeUi();
     void fillProfileFromForm(SessionProfile* profile) const;
     int profileIndexById(const QString& id) const;
+    void loadNotesFromVault(bool force = false);
+    void saveNotesToVault();
+    void flushNotesToVault(bool triggerSync);
+    void setNotesSavingState(bool saving);
+    void showNotesContextMenu(const QPoint& localPos);
+    void applyNotesCharFormat(const QTextCharFormat& format);
+    void applyNotesHeading(int level);
+    void applyNotesList(QTextListFormat::Style style);
     QToolButton* makeNavButton(const QString& iconPath, const QString& text, QWidget* parent);
     QToolButton* makeRowAction(const QString& iconPath, const QString& tip, QWidget* parent);
     void updateTopBar();
@@ -159,6 +178,7 @@ private:
     QButtonGroup* m_navGroup = nullptr;
     QToolButton* m_navHosts = nullptr;
     QToolButton* m_navKeys = nullptr;
+    QToolButton* m_navNotes = nullptr;
     QToolButton* m_navLogs = nullptr;
     QToolButton* m_navSettings = nullptr;
     QLabel* m_activeBadge = nullptr;
@@ -172,6 +192,7 @@ private:
     QStackedWidget* m_stack = nullptr;
     QWidget* m_hostsPage = nullptr;
     QWidget* m_keysPage = nullptr;
+    QWidget* m_notesPage = nullptr;
     QWidget* m_logsPage = nullptr;
     QWidget* m_settingsPage = nullptr;
     QWidget* m_formPage = nullptr;
@@ -183,6 +204,12 @@ private:
     QLabel* m_keysStatus = nullptr;
     QLabel* m_agentStatus = nullptr;
     QPlainTextEdit* m_logsView = nullptr;
+
+    QTextEdit* m_notesEdit = nullptr;
+    QLabel* m_notesSaveIcon = nullptr;
+    QTimer* m_notesSaveDebounce = nullptr;
+    QString m_notesLoadedMarkdown;
+    bool m_notesHydrated = false;
 
     QLabel* m_formTitle = nullptr;
     QLabel* m_formSub = nullptr;
