@@ -252,6 +252,8 @@ add_executable(clientosh
     src/platform/ConsoleAttach.cpp
     src/ui/Motion.h
     src/ui/Motion.cpp
+    src/ui/PasswordReveal.h
+    src/ui/PasswordReveal.cpp
     resources.qrc
     $<$<BOOL:${WIN32}>:${CLIENTOSH_GENERATED_DIR}/clientosh.rc>
 )

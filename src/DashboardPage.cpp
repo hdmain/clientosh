@@ -16,6 +16,7 @@
 #include "core/VaultManager.h"
 #include "core/UpdateCheck.h"
 #include "ui/Motion.h"
+#include "ui/PasswordReveal.h"
 
 #include <libssh/libssh.h>
 
@@ -414,6 +415,63 @@ void wipeBytes(QByteArray& bytes)
         bytes.fill('\0');
         bytes.clear();
     }
+}
+
+/** Generate a private key with the current libssh API (0.12+), falling back to
+ *  the deprecated ssh_pki_generate on older releases. */
+int generateSshPrivateKey(enum ssh_keytypes_e keyType, int rsaBits, ssh_key* outKey)
+{
+    if (!outKey) {
+        return SSH_ERROR;
+    }
+    *outKey = nullptr;
+
+#if defined(LIBSSH_VERSION_INT) && LIBSSH_VERSION_INT >= SSH_VERSION_INT(0, 12, 0)
+    // New context-based API — preferred; avoids the ssh_pki_generate deprecation
+    // warning on Fedora / libssh 0.12+.
+    ssh_pki_ctx ctx = nullptr;
+    if (keyType == SSH_KEYTYPE_RSA) {
+        const int bits = rsaBits > 0 ? rsaBits : 4096;
+        ctx = ssh_pki_ctx_new();
+        if (!ctx) {
+            return SSH_ERROR;
+        }
+        if (ssh_pki_ctx_options_set(ctx, SSH_PKI_OPTION_RSA_KEY_SIZE, &bits) != SSH_OK) {
+            ssh_pki_ctx_free(ctx);
+            return SSH_ERROR;
+        }
+    }
+    // ECDSA P-256/P-384/P-521 and ED25519 use typed enums + NULL context.
+    const int rc = ssh_pki_generate_key(keyType, ctx, outKey);
+    if (ctx) {
+        ssh_pki_ctx_free(ctx);
+    }
+    return rc;
+#else
+    int parameter = 0;
+    enum ssh_keytypes_e generateType = keyType;
+    switch (keyType) {
+    case SSH_KEYTYPE_RSA:
+        parameter = rsaBits > 0 ? rsaBits : 4096;
+        break;
+    case SSH_KEYTYPE_ECDSA_P256:
+        generateType = SSH_KEYTYPE_ECDSA;
+        parameter = 256;
+        break;
+    case SSH_KEYTYPE_ECDSA_P384:
+        generateType = SSH_KEYTYPE_ECDSA;
+        parameter = 384;
+        break;
+    case SSH_KEYTYPE_ECDSA_P521:
+        generateType = SSH_KEYTYPE_ECDSA;
+        parameter = 521;
+        break;
+    default:
+        parameter = 0;
+        break;
+    }
+    return ssh_pki_generate(generateType, parameter, outKey);
+#endif
 }
 
 QToolButton* makeSidebarNav(const QString& iconPath, const QString& text, QWidget* parent)
@@ -1921,7 +1979,7 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
         lay->setSpacing(6);
         m_passEdit = new QLineEdit(m_authPasswordPanel);
         m_passEdit->setPlaceholderText(QStringLiteral("password"));
-        m_passEdit->setEchoMode(QLineEdit::Password);
+        ui::attachPasswordReveal(m_passEdit);
         m_savePass = new QCheckBox(QStringLiteral("Save password with this profile"), m_authPasswordPanel);
         addLabeled(lay, QStringLiteral("Password"), m_passEdit);
         lay->addWidget(m_savePass);
@@ -1977,7 +2035,7 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
         lay->setSpacing(6);
         m_keyPassEdit = new QLineEdit(m_authPassphrasePanel);
         m_keyPassEdit->setPlaceholderText(QStringLiteral("leave empty if the key is not encrypted"));
-        m_keyPassEdit->setEchoMode(QLineEdit::Password);
+        ui::attachPasswordReveal(m_keyPassEdit);
         m_saveKeyPass = new QCheckBox(QStringLiteral("Save passphrase"),
                                      m_authPassphrasePanel);
         addLabeled(lay, QStringLiteral("Key passphrase (optional)"), m_keyPassEdit);
@@ -3433,35 +3491,8 @@ void DashboardPage::generateKeyIntoKeyring()
     }
     passphrase2.fill(QChar(u'\0'));
 
-    int parameter = 0;
-    switch (keyType) {
-    case SSH_KEYTYPE_RSA:
-        parameter = rsaBits > 0 ? rsaBits : 4096;
-        break;
-    case SSH_KEYTYPE_ECDSA_P256:
-        parameter = 256;
-        break;
-    case SSH_KEYTYPE_ECDSA_P384:
-        parameter = 384;
-        break;
-    case SSH_KEYTYPE_ECDSA_P521:
-        parameter = 521;
-        break;
-    default:
-        parameter = 0;
-        break;
-    }
-
-    // ECDSA typed as P256/P384/P521: libssh's ssh_pki_generate expects
-    // SSH_KEYTYPE_ECDSA + curve bits for older APIs; newer types take 0.
-    enum ssh_keytypes_e generateType = keyType;
-    if (keyType == SSH_KEYTYPE_ECDSA_P256 || keyType == SSH_KEYTYPE_ECDSA_P384
-        || keyType == SSH_KEYTYPE_ECDSA_P521) {
-        generateType = SSH_KEYTYPE_ECDSA;
-    }
-
     ssh_key generated = nullptr;
-    const int genRc = ssh_pki_generate(generateType, parameter, &generated);
+    const int genRc = generateSshPrivateKey(keyType, rsaBits, &generated);
     if (genRc != SSH_OK || !generated) {
         passphrase.fill(QChar(u'\0'));
         m_keysStatus->setText(QStringLiteral("failed to generate key (libssh error %1)").arg(genRc));
