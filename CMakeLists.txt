@@ -232,17 +232,21 @@ find_library(WINPR_LIBRARY
 
 if(FREERDP3_INCLUDE_DIR AND WINPR3_INCLUDE_DIR)
     set(CLIENTOSH_FREERDP_INCLUDE_DIRS "${FREERDP3_INCLUDE_DIR}" "${WINPR3_INCLUDE_DIR}")
+    set(CLIENTOSH_FREERDP_VERSION 3)
 elseif(FREERDP2_INCLUDE_DIR AND WINPR2_INCLUDE_DIR)
     set(CLIENTOSH_FREERDP_INCLUDE_DIRS "${FREERDP2_INCLUDE_DIR}" "${WINPR2_INCLUDE_DIR}")
+    set(CLIENTOSH_FREERDP_VERSION 2)
 else()
     set(CLIENTOSH_FREERDP_INCLUDE_DIRS "")
+    set(CLIENTOSH_FREERDP_VERSION 0)
 endif()
 
 if(CLIENTOSH_FREERDP_INCLUDE_DIRS STREQUAL "" OR NOT FREERDP_CLIENT_LIBRARY OR NOT FREERDP_LIBRARY OR NOT WINPR_LIBRARY)
     message(FATAL_ERROR
         "FreeRDP development libraries not found.\n"
         "  Windows (MSYS2): pacman -S mingw-w64-x86_64-freerdp\n"
-        "  Debian/Ubuntu:   apt install freerdp2-dev\n"
+        "  Debian/Ubuntu:   apt install freerdp3-dev  # Ubuntu 24.04+\n"
+        "                     apt install freerdp2-dev  # older releases (limited)\n"
         "  Fedora:          dnf install freerdp-devel\n"
         "  macOS:           brew install freerdp\n"
         "Set FREERDP_ROOT to the install prefix if needed.")
@@ -262,6 +266,7 @@ target_include_directories(clientosh_freerdp PRIVATE
 foreach(_rdp_inc IN LISTS CLIENTOSH_FREERDP_INCLUDE_DIRS)
     target_compile_options(clientosh_freerdp PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-I${_rdp_inc}>")
 endforeach()
+target_compile_definitions(clientosh_freerdp PRIVATE CLIENTOSH_FREERDP_VERSION=${CLIENTOSH_FREERDP_VERSION})
 target_link_libraries(clientosh_freerdp PUBLIC Qt6::Widgets clientosh_freerdp_libs)
 set_target_properties(clientosh_freerdp PROPERTIES AUTOMOC OFF AUTOUIC OFF)
 
@@ -272,6 +277,7 @@ target_link_libraries(clientosh_freerdp_libs INTERFACE
     "${WINPR_LIBRARY}"
 )
 message(STATUS "FreeRDP includes: ${CLIENTOSH_FREERDP_INCLUDE_DIRS}")
+message(STATUS "FreeRDP version: ${CLIENTOSH_FREERDP_VERSION}")
 message(STATUS "FreeRDP client lib: ${FREERDP_CLIENT_LIBRARY}")
 
 add_executable(clientosh

@@ -21,17 +21,25 @@
 #  include <freerdp/freerdp.h>
 #  include <freerdp/client.h>
 #  include <freerdp/client/cmdline.h>
+#  include <freerdp/codec/color.h>
+#  include <freerdp/event.h>
 #  include <freerdp/gdi/gdi.h>
 #  include <freerdp/input.h>
 #  include <freerdp/scancode.h>
+#  include <freerdp/channels/cliprdr.h>
+#  include <freerdp/client/cliprdr.h>
 #  include <winpr/wtypes.h>
 #  include <winpr/synch.h>
 #endif
 
+#ifndef CLIENTOSH_FREERDP_VERSION
+#  define CLIENTOSH_FREERDP_VERSION 0
+#endif
+
 #if !defined(freerdp_client_settings_parse_command_line_arguments) \
     && defined(freerdp_client_settings_parse_command_line)
-#  define freerdp_client_settings_parse_command_line_arguments \
-    freerdp_client_settings_parse_command_line
+#  define freerdp_client_settings_parse_command_line_arguments(settings, argc, argv, allowUnknown) \
+    freerdp_client_settings_parse_command_line((settings), (argc), (argv))
 #endif
 
 #if !defined(RDP_SCANCODE_PAGE_UP) && defined(RDP_SCANCODE_PRIOR)

@@ -212,7 +212,7 @@ Or build against an existing pinned Qt install (see *Windows build* below).
 
 ```bash
 sudo apt install build-essential cmake pkg-config \
-  qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev freerdp2-dev
+  qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev freerdp3-dev
 ```
 </details>
 

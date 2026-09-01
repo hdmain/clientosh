@@ -19,9 +19,8 @@ jobs:
       matrix:
         include:
           - name: Linux (Ubuntu, GCC)
-            # Match the oldest Qt supported by the Linux packaging job so CI
-            # catches accidental use of newer Qt APIs before publishing beta.
-            os: ubuntu-22.04
+            # Ubuntu 24.04 ships freerdp3-dev required by the embedded RDP client.
+            os: ubuntu-24.04
             cmake_args: -G "Unix Makefiles"
             build_dir: build-linux
           - name: macOS (Clang)
@@ -46,13 +45,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
+            libgl1-mesa-dev libegl1-mesa-dev freerdp3-dev
 
       - name: Install deps (macOS)
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install qt libssh openssl@3
+          brew install qt libssh openssl@3 freerdp
 
       - name: Install deps (Windows / MSYS2)
         if: runner.os == 'Windows'
@@ -69,6 +68,7 @@ jobs:
             mingw-w64-x86_64-qt6-svg
             mingw-w64-x86_64-libssh
             mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-freerdp
 
       - name: Configure
         run: |

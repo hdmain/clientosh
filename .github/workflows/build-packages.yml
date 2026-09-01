@@ -57,6 +57,7 @@ jobs:
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-libssh
             mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-freerdp
             mingw-w64-x86_64-ntldd
 
       - name: Install pinned Qt 6.9.2 and MinGW 13.1
@@ -129,7 +130,7 @@ jobs:
 
   build-linux:
     name: Linux (.deb + .rpm + .AppImage + .tar.gz)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       PACKAGE_LABEL: ${{ inputs.package_label }}
       BUILD_CHANNEL: ${{ inputs.build_channel }}
@@ -143,7 +144,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config dpkg-dev rpm \
-            qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev \
+            qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev freerdp3-dev \
             libgl1-mesa-dev libegl1-mesa-dev imagemagick libfuse2 file
 
       - name: Configure and build
@@ -325,7 +326,7 @@ jobs:
       - name: Install dependencies
         run: |
           brew update
-          brew install qt libssh openssl@3
+          brew install qt libssh openssl@3 freerdp
 
       - name: Configure and build
         run: |

@@ -93,7 +93,9 @@ static BOOL client_pre_connect(freerdp* instance)
         return FALSE;
     }
     rdpSettings* settings = instance->context->settings;
+#if CLIENTOSH_FREERDP_VERSION >= 3 && defined(FreeRDP_CertificateCallbackPreferPEM)
     freerdp_settings_set_bool(settings, FreeRDP_CertificateCallbackPreferPEM, TRUE);
+#endif
 
     if (PubSub_SubscribeChannelConnected(instance->context->pubSub, client_channel_connected) < 0) {
         return FALSE;
@@ -214,6 +216,7 @@ static void applyHighQualitySettings(rdpSettings* settings, int width, int heigh
     freerdp_settings_set_bool(settings, FreeRDP_AsyncChannels, TRUE);
 
     freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
+#if CLIENTOSH_FREERDP_VERSION >= 3
     freerdp_settings_set_bool(settings, FreeRDP_GfxH264, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444v2, TRUE);
@@ -222,9 +225,12 @@ static void applyHighQualitySettings(rdpSettings* settings, int width, int heigh
     freerdp_settings_set_bool(settings, FreeRDP_GfxSendQoeAck, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_GfxThinClient, FALSE);
     freerdp_settings_set_bool(settings, FreeRDP_GfxSmallCache, FALSE);
+#endif
 
     freerdp_settings_set_bool(settings, FreeRDP_RedirectClipboard, TRUE);
+#if CLIENTOSH_FREERDP_VERSION >= 3 && defined(FreeRDP_ClipboardFeatureMask)
     freerdp_settings_set_uint32(settings, FreeRDP_ClipboardFeatureMask, CLIPRDR_FLAG_DEFAULT_MASK);
+#endif
     freerdp_settings_set_bool(settings, FreeRDP_GrabKeyboard, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_GrabMouse, FALSE);
 }
@@ -281,13 +287,17 @@ static BOOL applyCommandLineSettings(rdpSettings* settings, const SessionProfile
     QStringList qualityArgs = baseArgs;
     qualityArgs << QStringLiteral("/network:auto");
     qualityArgs << QStringLiteral("/multitransport");
+#if CLIENTOSH_FREERDP_VERSION >= 3
     qualityArgs << QStringLiteral("/gfx:AVC444");
     qualityArgs << QStringLiteral("/gfx-h264:AVC444");
+#endif
     qualityArgs << QStringLiteral("/rfx");
     qualityArgs << QStringLiteral("+fonts");
     qualityArgs << QStringLiteral("-compression");
     qualityArgs << QStringLiteral("+clipboard");
+#if CLIENTOSH_FREERDP_VERSION >= 3
     qualityArgs << QStringLiteral("/clipboard:direction-to:all");
+#endif
     qualityArgs << QStringLiteral("+grab-keyboard");
 
     QString parseError;
