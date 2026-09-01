@@ -5,7 +5,7 @@
 <h1 align="center">clientosh</h1>
 
 <p align="center">
-  <b>A lightweight multiplatform SSH, SFTP, Telnet, and serial console client with a split-pane terminal - made for people who live on the command line.</b>
+  <b>A lightweight multiplatform SSH, SFTP, Telnet, RDP, and serial console client with a split-pane terminal - made for people who live on the command line.</b>
 </p>
 
 <p align="center">
@@ -64,6 +64,7 @@
 - **🔒 Layer-0 secure vault** - session metadata and secrets are encrypted at rest with **AES-256-GCM** (OpenSSL EVP), backed by your OS keyring: **Windows Credential Manager, macOS Keychain, and Secret Service (libsecret)** - with a machine-bound encrypted-file fallback that keeps things working headless.
 - **🗝️ Central SSH key management** - use your **SSH agent**, import reusable keys into the encrypted vault, or select a key file. Stored keys have OpenSSH-compatible SHA-256 fingerprints, per-key passphrases, and usage protection. Decrypted payloads are **zeroed in memory** after use.
 - **📡 Telnet terminal** - connect to Telnet hosts (port 23) with NAWS resize support, alongside SSH sessions in the same workspace.
+- **🖥️ RDP remote desktop** - embedded **FreeRDP** client in the workspace pane: enter credentials in-app, desktop renders inside clientosh (no external `mstsc` / `xfreerdp` window).
 - **🔌 Serial / COM terminal** - connect directly to local serial devices with configurable baud rate, data bits, parity, stop bits, and hardware/software flow control. Connected serial terminals can send recovery images through XMODEM with checksum/CRC-16 negotiation, retry handling, progress, and cancellation.
 - **⚡ Non-blocking threading model** - SSH auth, shell I/O, SFTP, and live stats all run on **worker threads**; the GUI never freezes on connect or auth.
 - **🖥️ Hand-rolled VT100/xterm emulator** - full scrollback buffer, 256-color + true SGR attributes, alt-screen, mouse reporting & tracking, box-drawing glyphs, DEC character sets, and live keyword/address highlighting - all in pure Qt widgets.
@@ -115,7 +116,7 @@ Plugins are Qt `MODULE` libraries loaded with `QPluginLoader` only while install
 |---|---|
 | **Language** | C++17 |
 | **UI toolkit** | Qt 6 (`Widgets`, `Network`, `Svg`) |
-| **SSH / SFTP / Telnet / Serial** | libssh 2.x (SSH/SFTP) · native Telnet (Qt Network) · native COM/TTY transport |
+| **SSH / SFTP / Telnet / RDP / Serial** | libssh 2.x (SSH/SFTP) · native Telnet (Qt Network) · **FreeRDP** (embedded RDP) · native COM/TTY transport |
 | **Cryptography** | OpenSSL EVP - AES-256-GCM authenticated encryption |
 | **Keyring** | Windows Credential Manager · macOS Keychain · Secret Service (`secret-tool`) |
 | **Build system** | CMake ≥ 3.21 + Ninja / Unix Makefiles / MinGW Makefiles |
@@ -200,7 +201,7 @@ flowchart TB
 ```bash
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake \
   mingw-w64-x86_64-qt6-base mingw-w64-x86_64-qt6-svg \
-  mingw-w64-x86_64-libssh mingw-w64-x86_64-openssl
+  mingw-w64-x86_64-libssh mingw-w64-x86_64-openssl mingw-w64-x86_64-freerdp
 ```
 
 Or build against an existing pinned Qt install (see *Windows build* below).
@@ -211,7 +212,7 @@ Or build against an existing pinned Qt install (see *Windows build* below).
 
 ```bash
 sudo apt install build-essential cmake pkg-config \
-  qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev
+  qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev freerdp2-dev
 ```
 </details>
 
@@ -219,7 +220,7 @@ sudo apt install build-essential cmake pkg-config \
 <summary><b>🐧 Fedora</b></summary>
 
 ```bash
-sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtsvg-devel libssh-devel openssl-devel
+sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtsvg-devel libssh-devel openssl-devel freerdp-devel
 ```
 </details>
 
@@ -227,7 +228,7 @@ sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtsvg-devel libssh-devel ope
 <summary><b>🍎 macOS - Homebrew</b></summary>
 
 ```bash
-brew install cmake qt libssh openssl@3 pkg-config
+brew install cmake qt libssh openssl@3 freerdp pkg-config
 ```
 </details>
 
@@ -305,7 +306,7 @@ requires a positive numeric `CLIENTOSH_BUILD_NUMBER`.
 
 ### 1. Add a session
 
-From the dashboard, create an **SSH** (terminal + SFTP), **Telnet** (terminal only), **SFTP-only**, or **Serial / COM** session. Serial profiles expose the local device and line settings instead of network credentials.
+From the dashboard, create an **SSH** (terminal + SFTP), **Telnet** (terminal only), **SFTP-only**, **RDP** (embedded remote desktop), or **Serial / COM** session. RDP opens a pane with user/domain/password fields and renders the Windows desktop inside clientosh via FreeRDP.
 
 Open connections also appear under **Hosts → Current sessions**. Use the `+` action there, or right-click a session tab and choose **Save connection profile**, to keep an ad-hoc session as a reusable host.
 
@@ -314,12 +315,13 @@ You can also open an ad-hoc terminal session directly from the command line. The
 ```bash
 /usr/bin/clientosh telnet 192.0.2.10:23 --name router
 /usr/bin/clientosh ssh 192.0.2.20:22 --name server
+/usr/bin/clientosh rdp admin@win.example.com --name windows
 /usr/bin/clientosh serial COM3 --baud 115200 --name console
 /usr/bin/clientosh serial /dev/ttyUSB0 --baud 9600 --name console
 ```
 
 If the endpoint matches a saved profile of the same type, its credentials and key settings are reused. Otherwise SSH uses the default username configured in clientosh settings.
-When clientosh is already running, subsequent SSH/Telnet/serial commands add another tab to the existing window instead of starting another window.
+When clientosh is already running, subsequent SSH/Telnet/RDP/serial commands add another tab to the existing window instead of starting another window.
 
 > By default, saved credentials are *rejected* unless you explicitly opt in to store a password - secrets live only in the encrypted keyring vault, never in plaintext.
 
@@ -408,6 +410,7 @@ clientosh [options] <command> <target>
 | `telnet` | Telnet terminal | 23 |
 | `sftp` | SFTP file manager only | 22 |
 | `serial` / `com` | Local Serial/COM terminal | — |
+| `rdp` / `desktop` | Embedded RDP desktop (FreeRDP) | 3389 |
 
 **Target** (required for connect commands): `host`, `host:port`, `user@host`, `user@host:port`, IPv6 `[::1]:port`, or a serial device such as `COM3` or `/dev/ttyUSB0`.
 
@@ -448,6 +451,10 @@ clientosh sftp backup.local:2222 -u backup --name Backups
 clientosh serial COM3 --baud 115200 --name Console
 clientosh serial /dev/ttyUSB0 --baud 9600 --name Console
 
+# RDP (embedded FreeRDP client in the workspace pane)
+clientosh rdp admin@win-server.example.com --name Windows
+clientosh rdp user@10.0.0.50:3389 -p secret --domain CORP --name DC
+
 # Windows (path to built binary)
 .\build\clientosh.exe telnet 192.168.0.1:23 --name Router
 .\build\clientosh.exe ssh user@10.0.0.5 --name Prod
@@ -459,7 +466,7 @@ clientosh telnet router.lan:23 --name Router
 
 Connect commands open the **GUI** and start the session in a new tab. Use `-n` / `--name` to set the tab title. Passwords from `-p` / `--password` are used for this session only and are **not** saved to the vault.
 
-For Telnet, username is optional (you can type credentials manually in the terminal). Serial sessions do not use authentication. For SSH and SFTP, provide `user@host` or `-u` / `--user`.
+For Telnet, username is optional (you can type credentials manually in the terminal). Serial sessions do not use authentication. RDP uses password auth only; enter credentials in the RDP pane before connecting. For SSH and SFTP, provide `user@host` or `-u` / `--user`.
 
 #### Options
 
@@ -475,6 +482,7 @@ For Telnet, username is optional (you can type credentials manually in the termi
 | `--key-passphrase` | Passphrase for an encrypted private key |
 | `--sftp` | With `ssh`, also open an SFTP pane |
 | `--baud` | Serial baud rate (default: 115200) |
+| `--domain` | Windows domain for RDP sessions |
 | `--verbose` | Verbose SFTP logging (same as Settings → SFTP) |
 | `-h`, `--help`, `-?` | Print usage and exit |
 | `-v`, `--version` | Print version and exit |
@@ -529,6 +537,7 @@ Settings are persisted as an INI file via Qt's `QSettings` (e.g. `%APPDATA%/clie
 - [x] Dark & light themes, fonts, background images
 - [x] Cross-distro packaging (deb / rpm / AppImage / Arch / dmg / Inno / NSIS)
 - [x] Telnet terminal sessions
+- [x] RDP remote desktop (embedded FreeRDP client)
 - [x] Password auth with keyboard-interactive fallback
 - [x] Addon marketplace (install from catalog)
 - [x] AI agent addon (OpenAI-compatible terminal agent)

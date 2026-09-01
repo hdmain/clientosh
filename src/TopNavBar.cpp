@@ -2,6 +2,7 @@
 #include "SessionChip.h"
 #include "SessionWorkspace.h"
 #include "SftpWindow.h"
+#include "RdpPane.h"
 #include "core/AppSettings.h"
 #include "core/SessionManager.h"
 #include "ui/Motion.h"
@@ -357,7 +358,7 @@ void TopNavBar::syncStatsProbe()
     const auto* live = m_sessions->session(id);
     const bool wantStats = AppSettings::showServerStats() && live && live->connected
                            && !live->profile.isTelnet() && !live->profile.isSerial()
-                           && !live->profile.isSftpOnly();
+                           && !live->profile.isRdp() && !live->profile.isSftpOnly();
 
     if (!wantStats) {
         if (!m_statsSessionId.isEmpty()) {
@@ -473,6 +474,11 @@ void TopNavBar::rebuildTabs()
             if (title.isEmpty()) {
                 title = QStringLiteral("sftp");
             }
+        } else if (ref.kind == PanelKind::Rdp) {
+            title = m_workspace->paneTitle(ref);
+            if (title.isEmpty()) {
+                title = QStringLiteral("rdp");
+            }
         } else {
             const auto* live = m_sessions->session(ref.sessionId);
             if (!live) {
@@ -525,6 +531,11 @@ void TopNavBar::showPanelContextMenu(const PanelRef& ref, const QPoint& globalPo
         if (auto* sftp = qobject_cast<SftpWindow*>(m_workspace->sftpWidget(ref.sessionId))) {
             host = sftp->profile().host.trimmed();
             serial = sftp->profile().isSerial();
+        }
+    }
+    if (host.isEmpty() && ref.kind == PanelKind::Rdp) {
+        if (auto* rdp = qobject_cast<RdpPane*>(m_workspace->rdpWidget(ref.sessionId))) {
+            host = rdp->profile().host.trimmed();
         }
     }
     if (!host.isEmpty()) {

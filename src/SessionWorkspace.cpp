@@ -489,6 +489,17 @@ void SessionWorkspace::addSftp(const QString& sessionId, QWidget* sftp, const QS
     notifyLayoutChanged();
 }
 
+void SessionWorkspace::addRdp(const QString& sessionId, QWidget* rdp, const QString& title)
+{
+    if (!rdp || sessionId.isEmpty()) {
+        return;
+    }
+    const PanelRef ref = PanelRef::rdp(sessionId);
+    PaneFrame* frame = ensurePane(ref, rdp, title.isEmpty() ? sessionId : title);
+    activatePanel(frame);
+    notifyLayoutChanged();
+}
+
 void SessionWorkspace::showPanel(const PanelRef& ref)
 {
     PaneFrame* frame = pane(ref);
@@ -565,6 +576,33 @@ QWidget* SessionWorkspace::takeSftp(const QString& sessionId)
     return content;
 }
 
+QWidget* SessionWorkspace::rdpWidget(const QString& sessionId) const
+{
+    if (PaneFrame* f = pane(PanelRef::rdp(sessionId))) {
+        return f->content();
+    }
+    return nullptr;
+}
+
+QWidget* SessionWorkspace::takeRdp(const QString& sessionId)
+{
+    const PanelRef ref = PanelRef::rdp(sessionId);
+    PaneFrame* f = pane(ref);
+    if (!f) {
+        return nullptr;
+    }
+    extractPane(f);
+    QWidget* content = f->takeContent();
+    m_panes.remove(ref.key());
+    m_tabOrder.removeAll(ref.key());
+    if (m_active == ref) {
+        m_active = {};
+    }
+    f->deleteLater();
+    notifyLayoutChanged();
+    return content;
+}
+
 void SessionWorkspace::showSession(const QString& sessionId)
 {
     showPanel(PanelRef::terminal(sessionId));
@@ -604,6 +642,7 @@ void SessionWorkspace::removePanel(const PanelRef& ref, bool deleteContent)
 void SessionWorkspace::removeSessionPanels(const QString& sessionId)
 {
     removePanel(PanelRef::sftp(sessionId), true);
+    removePanel(PanelRef::rdp(sessionId), true);
     removePanel(PanelRef::terminal(sessionId), true);
 }
 

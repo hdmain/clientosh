@@ -31,6 +31,7 @@ QJsonObject profileToJsonFull(const SessionProfile& p)
     o.insert(QStringLiteral("serialParity"), p.serialParity);
     o.insert(QStringLiteral("serialStopBits"), p.serialStopBits);
     o.insert(QStringLiteral("serialFlowControl"), p.serialFlowControl);
+    o.insert(QStringLiteral("rdpDomain"), p.rdpDomain);
     return o;
 }
 
@@ -53,7 +54,13 @@ SessionProfile profileFromJsonFull(const QJsonObject& o)
     const QString mode = o.value(QStringLiteral("connectionMode")).toString();
     p.connectionMode = connectionModeFromString(mode);
     if (p.port <= 0 && !p.isSerial()) {
-        p.port = p.isTelnet() ? 23 : 22;
+        if (p.isTelnet()) {
+            p.port = 23;
+        } else if (p.isRdp()) {
+            p.port = 3389;
+        } else {
+            p.port = 22;
+        }
     }
     p.system = o.value(QStringLiteral("system")).toString();
     p.serialBaudRate = o.value(QStringLiteral("serialBaudRate")).toInt(115200);
@@ -61,6 +68,7 @@ SessionProfile profileFromJsonFull(const QJsonObject& o)
     p.serialParity = o.value(QStringLiteral("serialParity")).toString(QStringLiteral("none"));
     p.serialStopBits = o.value(QStringLiteral("serialStopBits")).toInt(1);
     p.serialFlowControl = o.value(QStringLiteral("serialFlowControl")).toString(QStringLiteral("none"));
+    p.rdpDomain = o.value(QStringLiteral("rdpDomain")).toString();
     p.normalizeAuthentication();
     if (p.id.isEmpty()) {
         p.id = QUuid::createUuid().toString(QUuid::WithoutBraces);

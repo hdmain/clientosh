@@ -1976,6 +1976,8 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
                                    static_cast<int>(ConnectionMode::Serial));
     m_connectionModeCombo->addItem(QStringLiteral("SFTP only - file manager"),
                                    static_cast<int>(ConnectionMode::SftpOnly));
+    m_connectionModeCombo->addItem(QStringLiteral("RDP - remote desktop"),
+                                   static_cast<int>(ConnectionMode::Rdp));
 
     m_hostEdit = new QLineEdit(formInner);
     m_hostEdit->setPlaceholderText(QStringLiteral("hostname or IP"));
@@ -2019,6 +2021,14 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     hostPortLay->addLayout(portCol, 0);
     networkLay->addWidget(hostPortRow);
     addLabeled(networkLay, QStringLiteral("User"), m_userEdit);
+    m_rdpDomainRow = new QWidget(m_networkFieldsPanel);
+    auto* domainLay = new QVBoxLayout(m_rdpDomainRow);
+    domainLay->setContentsMargins(0, 0, 0, 0);
+    domainLay->setSpacing(4);
+    m_rdpDomainEdit = new QLineEdit(m_rdpDomainRow);
+    m_rdpDomainEdit->setPlaceholderText(QStringLiteral("optional Windows domain"));
+    addLabeled(domainLay, QStringLiteral("Domain"), m_rdpDomainEdit);
+    networkLay->addWidget(m_rdpDomainRow);
     formLay->addWidget(m_networkFieldsPanel);
 
     m_serialFieldsPanel = new QWidget(formInner);
@@ -3185,6 +3195,7 @@ void DashboardPage::clearForm()
     if (m_serialParityCombo) m_serialParityCombo->setCurrentText(QStringLiteral("none"));
     if (m_serialStopBitsCombo) m_serialStopBitsCombo->setCurrentText(QStringLiteral("1"));
     if (m_serialFlowCombo) m_serialFlowCombo->setCurrentText(QStringLiteral("none"));
+    if (m_rdpDomainEdit) m_rdpDomainEdit->clear();
     m_passEdit->clear();
     m_savePass->setChecked(AppSettings::savePasswordDefault());
     m_keyPathEdit->clear();
@@ -3210,6 +3221,9 @@ void DashboardPage::loadProfileIntoForm(const SessionProfile& profile)
     m_hostEdit->setText(profile.host);
     m_portSpin->setValue(profile.port);
     m_userEdit->setText(profile.user);
+    if (m_rdpDomainEdit) {
+        m_rdpDomainEdit->setText(profile.rdpDomain);
+    }
     if (m_serialPortCombo && profile.isSerial()) m_serialPortCombo->setCurrentText(profile.host);
     if (m_serialBaudCombo) m_serialBaudCombo->setCurrentText(QString::number(profile.serialBaudRate));
     if (m_serialDataBitsCombo) m_serialDataBitsCombo->setCurrentText(QString::number(profile.serialDataBits));
@@ -3309,20 +3323,28 @@ void DashboardPage::updateConnectionModeUi()
     const auto mode = static_cast<ConnectionMode>(m_connectionModeCombo->currentData().toInt());
     const bool telnet = (mode == ConnectionMode::Telnet);
     const bool serial = (mode == ConnectionMode::Serial);
+    const bool rdp = (mode == ConnectionMode::Rdp);
 
     if (telnet && m_portSpin->value() == AppSettings::defaultPort()) {
         m_portSpin->setValue(23);
     }
+    if (rdp && (m_portSpin->value() == AppSettings::defaultPort() || m_portSpin->value() == 23)) {
+        m_portSpin->setValue(3389);
+    }
 
     if (m_networkFieldsPanel) m_networkFieldsPanel->setVisible(!serial);
     if (m_serialFieldsPanel) m_serialFieldsPanel->setVisible(serial);
+    if (m_rdpDomainRow) m_rdpDomainRow->setVisible(rdp);
     if (m_authSectionTitle) m_authSectionTitle->setVisible(!serial);
     if (m_authSectionRule) m_authSectionRule->setVisible(!serial);
-    if (m_authMethodLabel) m_authMethodLabel->setVisible(!serial);
+    if (m_authMethodLabel) m_authMethodLabel->setVisible(!serial && !rdp);
     if (m_authMethodCombo) {
-        m_authMethodCombo->setVisible(!telnet && !serial);
+        m_authMethodCombo->setVisible(!telnet && !serial && !rdp);
     }
     if ((telnet || serial) && m_authMethodCombo) {
+        m_authMethodCombo->setCurrentIndex(0);
+    }
+    if (rdp && m_authMethodCombo) {
         m_authMethodCombo->setCurrentIndex(0);
     }
     updateAuthMethodUi();
@@ -3338,10 +3360,11 @@ void DashboardPage::updateAuthMethodUi()
         : ConnectionMode::Ssh;
     const bool telnet = (mode == ConnectionMode::Telnet);
     const bool serial = (mode == ConnectionMode::Serial);
+    const bool rdp = (mode == ConnectionMode::Rdp);
     const int method = m_authMethodCombo->currentData().toInt();
-    const bool password = !serial && (telnet || (method == static_cast<int>(AuthMethod::Password)));
-    const bool keyring = !telnet && !serial && (method == static_cast<int>(AuthMethod::StoredKey));
-    const bool keyFile = !telnet && !serial && (method == static_cast<int>(AuthMethod::KeyFile));
+    const bool password = !serial && (telnet || rdp || (method == static_cast<int>(AuthMethod::Password)));
+    const bool keyring = !telnet && !serial && !rdp && (method == static_cast<int>(AuthMethod::StoredKey));
+    const bool keyFile = !telnet && !serial && !rdp && (method == static_cast<int>(AuthMethod::KeyFile));
     if (m_authPasswordPanel) {
         m_authPasswordPanel->setVisible(password);
     }
@@ -3412,12 +3435,29 @@ void DashboardPage::fillProfileFromForm(SessionProfile* profile) const
         profile->keyPassphrase.clear();
         profile->saveKeyPassphrase = false;
         profile->authMethod = AuthMethod::Password;
+        profile->rdpDomain.clear();
         if (!profile->savePassword) {
             profile->password.clear();
         }
         return;
     }
 
+    if (profile->isRdp()) {
+        profile->privateKeyId.clear();
+        profile->privateKeyPath.clear();
+        profile->password = m_passEdit->text();
+        profile->savePassword = m_savePass->isChecked();
+        profile->keyPassphrase.clear();
+        profile->saveKeyPassphrase = false;
+        profile->authMethod = AuthMethod::Password;
+        profile->rdpDomain = m_rdpDomainEdit ? m_rdpDomainEdit->text().trimmed() : QString();
+        if (!profile->savePassword) {
+            profile->password.clear();
+        }
+        return;
+    }
+
+    profile->rdpDomain.clear();
     const int method = m_authMethodCombo ? m_authMethodCombo->currentData().toInt() : 0;
     profile->authMethod = static_cast<AuthMethod>(method);
     if (profile->authMethod == AuthMethod::StoredKey) {
@@ -3987,6 +4027,11 @@ void DashboardPage::openSavedProfile(const QString& profileId)
     const SessionProfile& p = m_profiles[row];
     if (p.isSftpOnly()) {
         emit openSftpForProfile(p);
+    } else if (p.isRdp()) {
+        emit openProfile(p);
+    } else if (p.port == 3389 && p.connectionMode == ConnectionMode::Ssh) {
+        m_hint->setText(QStringLiteral("this host uses port 3389 — edit the profile and set type to RDP"));
+        appendLog(QStringLiteral("skipped SSH connect to %1:3389 (use connection type RDP)").arg(p.host));
     } else {
         emit openProfile(p);
     }
@@ -4174,6 +4219,7 @@ void DashboardPage::rebuildSavedList()
     const auto authLabel = [&storedKeyNames](const SessionProfile& profile) {
         if (profile.isSerial()) return QStringLiteral("—");
         if (profile.isTelnet()) return QStringLiteral("Password / prompt");
+        if (profile.isRdp()) return QStringLiteral("Password");
         switch (profile.authMethod) {
         case AuthMethod::SshAgent:
             return QStringLiteral("SSH Agent");
@@ -4695,10 +4741,11 @@ void DashboardPage::showHostContextMenu(const QPoint& globalPos, const QString& 
 
     auto* connectAct = menu.addAction(p.isTelnet() ? QStringLiteral("Connect via Telnet")
                                       : p.isSerial() ? QStringLiteral("Open serial port")
+                                      : p.isRdp() ? QStringLiteral("Connect via RDP")
                                                      : QStringLiteral("Connect via SSH"));
     connect(connectAct, &QAction::triggered, this, [this, profileId]() { openSavedProfile(profileId); });
 
-    if (!p.isTelnet() && !p.isSerial()) {
+    if (!p.isTelnet() && !p.isSerial() && !p.isRdp()) {
         auto* sftp = menu.addAction(QStringLiteral("Connect via SFTP"));
         connect(sftp, &QAction::triggered, this, [this, profileId]() { sftpSavedProfile(profileId); });
     }
@@ -4830,6 +4877,7 @@ void DashboardPage::saveCurrentFormAsProfile()
 {
     const auto mode = static_cast<ConnectionMode>(m_connectionModeCombo->currentData().toInt());
     const bool serial = (mode == ConnectionMode::Serial);
+    const bool rdp = (mode == ConnectionMode::Rdp);
     const QString host = m_hostEdit->text().trimmed();
     const QString user = m_userEdit->text().trimmed();
     if (serial && m_serialPortCombo->currentText().trimmed().isEmpty()) {
@@ -4842,15 +4890,15 @@ void DashboardPage::saveCurrentFormAsProfile()
     }
 
     const int method = m_authMethodCombo ? m_authMethodCombo->currentData().toInt() : 0;
-    if (!serial && method == 0 && m_passEdit->text().isEmpty()) {
+    if (!serial && !rdp && method == 0 && m_passEdit->text().isEmpty()) {
         m_hint->setText(QStringLiteral("enter a password"));
         return;
     }
-    if (!serial && method == 1 && m_keyringCombo->currentData().toString().isEmpty()) {
+    if (!serial && !rdp && method == 1 && m_keyringCombo->currentData().toString().isEmpty()) {
         m_hint->setText(QStringLiteral("import or select a stored SSH key"));
         return;
     }
-    if (!serial && method == 2 && m_keyPathEdit->text().trimmed().isEmpty()) {
+    if (!serial && !rdp && method == 2 && m_keyPathEdit->text().trimmed().isEmpty()) {
         m_hint->setText(QStringLiteral("choose a private key file"));
         return;
     }
@@ -4877,7 +4925,7 @@ void DashboardPage::saveCurrentFormAsProfile()
         bool updated = false;
         for (SessionProfile& existing : m_profiles) {
             if (existing.id == m_editingId) {
-                if (method == 0 && p.savePassword && m_passEdit->text().isEmpty()
+                if ((method == 0 || rdp) && p.savePassword && m_passEdit->text().isEmpty()
                     && !existing.password.isEmpty()) {
                     p.password = existing.password;
                 }
@@ -4918,6 +4966,7 @@ void DashboardPage::connectFromForm()
 {
     const auto mode = static_cast<ConnectionMode>(m_connectionModeCombo->currentData().toInt());
     const bool serial = (mode == ConnectionMode::Serial);
+    const bool rdp = (mode == ConnectionMode::Rdp);
     const QString host = m_hostEdit->text().trimmed();
     const QString user = m_userEdit->text().trimmed();
     if (serial && m_serialPortCombo->currentText().trimmed().isEmpty()) {
@@ -4932,7 +4981,7 @@ void DashboardPage::connectFromForm()
     const bool telnet = (mode == ConnectionMode::Telnet);
 
     const int method = m_authMethodCombo ? m_authMethodCombo->currentData().toInt() : 0;
-    if (!telnet && !serial) {
+    if (!telnet && !serial && !rdp) {
         if (method == 0 && m_passEdit->text().isEmpty() && m_editingId.isEmpty()) {
             m_hint->setText(QStringLiteral("enter a password"));
             return;
@@ -4950,7 +4999,7 @@ void DashboardPage::connectFromForm()
     SessionProfile p = makeProfile(host, m_portSpin->value(), user, QString(), m_nameEdit->text());
     fillProfileFromForm(&p);
 
-    if (!serial && method == 0 && p.password.isEmpty() && !m_editingId.isEmpty()) {
+    if (!serial && (method == 0 || rdp) && p.password.isEmpty() && !m_editingId.isEmpty()) {
         for (const SessionProfile& existing : m_profiles) {
             if (existing.id == m_editingId && !existing.password.isEmpty()) {
                 p.password = existing.password;
@@ -4969,6 +5018,10 @@ void DashboardPage::connectFromForm()
 
     if (p.isSftpOnly()) {
         emit openSftpForProfile(p);
+    } else if (p.isRdp()) {
+        emit openProfile(p);
+    } else if (p.port == 3389) {
+        m_hint->setText(QStringLiteral("port 3389 requires connection type RDP, not SSH"));
     } else {
         emit openProfile(p);
     }

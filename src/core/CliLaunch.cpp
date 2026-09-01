@@ -96,8 +96,11 @@ ConnectionMode modeFromCommand(const QString& cmd, QString* errorOut)
     if (c == QLatin1String("serial") || c == QLatin1String("com")) {
         return ConnectionMode::Serial;
     }
+    if (c == QLatin1String("rdp") || c == QLatin1String("desktop")) {
+        return ConnectionMode::Rdp;
+    }
     if (errorOut) {
-        *errorOut = QStringLiteral("unknown command %1 (expected ssh, telnet, sftp, or serial)").arg(cmd);
+        *errorOut = QStringLiteral("unknown command %1 (expected ssh, telnet, sftp, serial, or rdp)").arg(cmd);
     }
     return ConnectionMode::Ssh;
 }
@@ -109,6 +112,8 @@ int defaultPortFor(ConnectionMode mode)
         return 23;
     case ConnectionMode::Serial:
         return 0;
+    case ConnectionMode::Rdp:
+        return 3389;
     case ConnectionMode::SftpOnly:
     case ConnectionMode::Ssh:
     default:
@@ -166,13 +171,14 @@ void configureParser(QCommandLineParser& parser)
 {
     parser.setApplicationDescription(
         QStringLiteral(
-            "clientosh - SSH, SFTP, Telnet, and serial client\n"
+            "clientosh - SSH, SFTP, Telnet, serial, and RDP client\n"
             "\n"
             "Quick connect:\n"
             "  clientosh telnet 192.168.0.1:23 --name Router\n"
             "  clientosh ssh user@prod.example.com --name Production\n"
             "  clientosh ssh 10.0.0.5:2222 -u admin --name Jump\n"
             "  clientosh sftp deploy@files.example.com --name Deploy\n"
+            "  clientosh rdp admin@win-server.example.com --name Windows\n"
             "  clientosh ssh host -i ~/.ssh/id_ed25519 -u root --sftp\n"
             "  clientosh serial COM3 --baud 115200 --name Console\n"
             "  clientosh serial /dev/ttyUSB0 --baud 9600 --name Console\n"
@@ -182,7 +188,7 @@ void configureParser(QCommandLineParser& parser)
 
     parser.addPositionalArgument(
         QStringLiteral("command"),
-        QStringLiteral("Connection type: ssh, telnet, sftp, or serial."));
+        QStringLiteral("Connection type: ssh, telnet, sftp, serial, or rdp."));
     parser.addPositionalArgument(
         QStringLiteral("target"),
         QStringLiteral("Remote host or serial device (see examples above)."));
@@ -226,6 +232,10 @@ void configureParser(QCommandLineParser& parser)
         QStringLiteral("Serial baud rate (default: 115200)."),
         QStringLiteral("rate"),
         QStringLiteral("115200")));
+    parser.addOption(QCommandLineOption(
+        QStringLiteral("domain"),
+        QStringLiteral("Windows domain for RDP sessions."),
+        QStringLiteral("domain")));
 
     parser.addOption(QCommandLineOption(
         {QStringLiteral("h"), QStringLiteral("help"), QStringLiteral("?")},
@@ -333,6 +343,17 @@ Request parse(const QCommandLineParser& parser)
     if (parser.isSet(QStringLiteral("key-passphrase"))) {
         profile.keyPassphrase = parser.value(QStringLiteral("key-passphrase"));
     }
+    if (profile.isRdp()) {
+        if (parser.isSet(QStringLiteral("identity")) || parser.isSet(QStringLiteral("keyring"))
+            || parser.isSet(QStringLiteral("agent"))) {
+            req.error = QStringLiteral("RDP supports only password authentication");
+            return req;
+        }
+        if (parser.isSet(QStringLiteral("domain"))) {
+            profile.rdpDomain = parser.value(QStringLiteral("domain")).trimmed();
+        }
+        profile.authMethod = AuthMethod::Password;
+    }
 
     req.openSftpWithSsh = parser.isSet(QStringLiteral("sftp"));
 
@@ -341,7 +362,7 @@ Request parse(const QCommandLineParser& parser)
         return req;
     }
 
-    if (!profile.isTelnet() && !profile.isSerial() && profile.user.isEmpty()) {
+    if (!profile.isTelnet() && !profile.isSerial() && !profile.isRdp() && profile.user.isEmpty()) {
         profile.user = AppSettings::defaultUser().trimmed();
     }
 

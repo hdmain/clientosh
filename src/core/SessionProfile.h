@@ -17,7 +17,8 @@ enum class ConnectionMode {
     Ssh = 0,     // interactive terminal + optional SFTP
     SftpOnly = 1, // open SFTP file manager only
     Telnet = 2,   // raw telnet terminal (no SFTP)
-    Serial = 3    // local serial/COM terminal
+    Serial = 3,   // local serial/COM terminal
+    Rdp = 4       // remote desktop (external RDP client)
 };
 
 enum class AuthMethod {
@@ -83,6 +84,7 @@ struct SessionProfile {
     QString serialParity = QStringLiteral("none");
     int serialStopBits = 1;
     QString serialFlowControl = QStringLiteral("none");
+    QString rdpDomain;
     QString system; // OS detected from the SSH banner on last connect (e.g. "Linux", "Ubuntu").
 
     bool usesPrivateKey() const
@@ -141,6 +143,8 @@ struct SessionProfile {
 
     bool isSerial() const { return connectionMode == ConnectionMode::Serial; }
 
+    bool isRdp() const { return connectionMode == ConnectionMode::Rdp; }
+
     bool isTerminal() const
     {
         return connectionMode == ConnectionMode::Ssh || connectionMode == ConnectionMode::Telnet
@@ -157,6 +161,9 @@ struct SessionProfile {
         }
         if (isSerial()) {
             return QStringLiteral("Serial");
+        }
+        if (isRdp()) {
+            return QStringLiteral("RDP");
         }
         return QStringLiteral("SSH");
     }
@@ -197,6 +204,9 @@ inline ConnectionMode connectionModeFromString(const QString& value)
         || value.compare(QLatin1String("com"), Qt::CaseInsensitive) == 0) {
         return ConnectionMode::Serial;
     }
+    if (value.compare(QLatin1String("rdp"), Qt::CaseInsensitive) == 0) {
+        return ConnectionMode::Rdp;
+    }
     return ConnectionMode::Ssh;
 }
 
@@ -209,6 +219,8 @@ inline QString connectionModeToString(ConnectionMode mode)
         return QStringLiteral("telnet");
     case ConnectionMode::Serial:
         return QStringLiteral("serial");
+    case ConnectionMode::Rdp:
+        return QStringLiteral("rdp");
     case ConnectionMode::Ssh:
     default:
         return QStringLiteral("ssh");
@@ -248,6 +260,7 @@ inline QVector<SessionProfile> profilesFromQSettingsStore(QSettings& s)
         p.serialParity = s.value(QStringLiteral("serialParity"), QStringLiteral("none")).toString();
         p.serialStopBits = s.value(QStringLiteral("serialStopBits"), 1).toInt();
         p.serialFlowControl = s.value(QStringLiteral("serialFlowControl"), QStringLiteral("none")).toString();
+        p.rdpDomain = s.value(QStringLiteral("rdpDomain")).toString();
         if (p.id.isEmpty()) {
             p.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         }
@@ -322,6 +335,7 @@ inline QJsonObject profileToJson(const SessionProfile& p)
     o.insert(QStringLiteral("serialParity"), p.serialParity);
     o.insert(QStringLiteral("serialStopBits"), p.serialStopBits);
     o.insert(QStringLiteral("serialFlowControl"), p.serialFlowControl);
+    o.insert(QStringLiteral("rdpDomain"), p.rdpDomain);
     return o;
 }
 
@@ -347,6 +361,7 @@ inline SessionProfile profileFromJson(const QJsonObject& o)
     p.serialParity = o.value(QStringLiteral("serialParity")).toString(QStringLiteral("none"));
     p.serialStopBits = o.value(QStringLiteral("serialStopBits")).toInt(1);
     p.serialFlowControl = o.value(QStringLiteral("serialFlowControl")).toString(QStringLiteral("none"));
+    p.rdpDomain = o.value(QStringLiteral("rdpDomain")).toString();
     p.normalizeAuthentication();
     // Leave empty ids empty here — loadProfiles() assigns and persists once.
     return p;

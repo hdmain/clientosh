@@ -225,6 +225,8 @@ private:
     QLineEdit* m_hostEdit = nullptr;
     QSpinBox* m_portSpin = nullptr;
     QLineEdit* m_userEdit = nullptr;
+    QWidget* m_rdpDomainRow = nullptr;
+    QLineEdit* m_rdpDomainEdit = nullptr;
     QWidget* m_networkFieldsPanel = nullptr;
     QWidget* m_serialFieldsPanel = nullptr;
     QComboBox* m_serialPortCombo = nullptr;

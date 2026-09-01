@@ -24,12 +24,15 @@ public:
 
     void addTerminal(const QString& sessionId, QWidget* terminal, const QString& title);
     void addSftp(const QString& sessionId, QWidget* sftp, const QString& title);
+    void addRdp(const QString& sessionId, QWidget* rdp, const QString& title);
     bool hasSftp(const QString& sessionId) const;
     QString paneTitle(const PanelRef& ref) const;
-    QWidget* takeTerminal(const QString& sessionId);
-    QWidget* takeSftp(const QString& sessionId);
     QWidget* terminalWidget(const QString& sessionId) const;
     QWidget* sftpWidget(const QString& sessionId) const;
+    QWidget* rdpWidget(const QString& sessionId) const;
+    QWidget* takeTerminal(const QString& sessionId);
+    QWidget* takeSftp(const QString& sessionId);
+    QWidget* takeRdp(const QString& sessionId);
 
     void showPanel(const PanelRef& ref);
     void showSession(const QString& sessionId); // focuses terminal pane for session

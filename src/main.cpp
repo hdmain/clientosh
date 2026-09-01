@@ -68,6 +68,9 @@ QJsonObject commandFromCliRequest(const CliLaunch::Request& req)
         request.insert(QStringLiteral("hasName"), true);
         request.insert(QStringLiteral("name"), profile.name);
     }
+    if (!profile.rdpDomain.isEmpty()) {
+        request.insert(QStringLiteral("rdpDomain"), profile.rdpDomain);
+    }
     if (!profile.user.isEmpty()) {
         request.insert(QStringLiteral("user"), profile.user);
     }
@@ -127,6 +130,9 @@ SessionProfile profileFromCommand(const QJsonObject& request)
 
     if (request.value(QStringLiteral("hasName")).toBool()) {
         profile.name = request.value(QStringLiteral("name")).toString().trimmed();
+    }
+    if (request.contains(QStringLiteral("rdpDomain"))) {
+        profile.rdpDomain = request.value(QStringLiteral("rdpDomain")).toString().trimmed();
     }
     if (request.contains(QStringLiteral("password"))) {
         profile.password = request.value(QStringLiteral("password")).toString();

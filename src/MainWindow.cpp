@@ -8,6 +8,7 @@
 #include "core/addons/AddonHostContext.h"
 #include "core/addons/AiAgentBridge.h"
 #include "platform/WindowStayOnTop.h"
+#include "RdpPane.h"
 #include "SessionWorkspace.h"
 #include "SftpWindow.h"
 #include "TerminalWidget.h"
@@ -483,6 +484,16 @@ void MainWindow::openProfileSession(const SessionProfile& profile)
         openProfileSftpOnly(profile);
         return;
     }
+    if (profile.isRdp()) {
+        openRdpSession(profile);
+        return;
+    }
+    if (profile.port == 3389 && profile.connectionMode == ConnectionMode::Ssh) {
+        QMessageBox::information(this, QStringLiteral("rdp"),
+                                 QStringLiteral("Port 3389 is used for Remote Desktop.\n"
+                                                "Edit the profile and set connection type to RDP."));
+        return;
+    }
     beginTerminalSession(profile, false);
 }
 
@@ -494,6 +505,10 @@ void MainWindow::openProfileThenSftp(const SessionProfile& profile)
     }
     if (profile.isTelnet() || profile.isSerial()) {
         beginTerminalSession(profile, false);
+        return;
+    }
+    if (profile.isRdp()) {
+        openRdpSession(profile);
         return;
     }
     // SSH + SFTP: open both independently so SFTP never blocks on SSH.
@@ -558,6 +573,12 @@ void MainWindow::launchFromCli(const SessionProfile& profile, bool openSftpWithS
 {
     if (profile.isSftpOnly()) {
         openStandaloneSftp(profile);
+        showWorkspace();
+        m_topNav->refresh();
+        return;
+    }
+    if (profile.isRdp()) {
+        openRdpSession(profile);
         showWorkspace();
         m_topNav->refresh();
         return;
@@ -786,6 +807,9 @@ void MainWindow::openOrFocusPanel(const PanelRef& ref)
         && !m_sessions->session(ref.sessionId)) {
         return;
     }
+    if (ref.kind == PanelKind::Rdp && !m_workspace->containsPanel(ref)) {
+        return;
+    }
     if (ref.kind == PanelKind::Terminal) {
         m_sessions->activateSession(ref.sessionId);
     }
@@ -830,7 +854,7 @@ void MainWindow::openSftpFromSession(const QString& sessionId)
     if (!live) {
         return;
     }
-    if (live->profile.isTelnet() || live->profile.isSerial()) {
+    if (live->profile.isTelnet() || live->profile.isSerial() || live->profile.isRdp()) {
         QMessageBox::information(this, QStringLiteral("sftp"),
                                  QStringLiteral("SFTP is not available for this session type."));
         return;
@@ -872,6 +896,42 @@ void MainWindow::createSftpPane(const QString& panelId, const SessionProfile& pr
     m_topNav->refresh();
 }
 
+void MainWindow::openRdpSession(const SessionProfile& profile)
+{
+    if (profile.host.trimmed().isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("rdp"),
+                                 QStringLiteral("Profile needs a host to open RDP."));
+        return;
+    }
+    const QString panelId = profile.id.trimmed().isEmpty()
+                                ? QUuid::createUuid().toString(QUuid::WithoutBraces)
+                                : profile.id;
+    createRdpPane(panelId, profile);
+}
+
+void MainWindow::createRdpPane(const QString& panelId, const SessionProfile& profile)
+{
+    auto* pane = new RdpPane(profile, m_workspace);
+    pane->setStyleSheet(styleSheet());
+    m_rdpPanes.insert(panelId, pane);
+    connect(pane, &RdpPane::debugLog, this, [this](const QString& line) {
+        m_dashboard->appendLog(line);
+    });
+    connect(pane, &RdpPane::windowClosed, this, [this](const QString& sid) {
+        m_rdpPanes.remove(sid);
+        m_workspace->removePanel(PanelRef::rdp(sid), false);
+        if (!m_workspace->hasAttachedSessions()) {
+            showDashboard();
+        }
+        m_topNav->refresh();
+    });
+
+    const QString title = QStringLiteral("rdp · %1").arg(profile.displayTitle());
+    m_workspace->addRdp(panelId, pane, title);
+    showWorkspace();
+    m_topNav->refresh();
+}
+
 void MainWindow::closePanel(const PanelRef& ref)
 {
     if (!ref.isValid()) {
@@ -896,6 +956,26 @@ void MainWindow::closePanel(const PanelRef& ref)
         return;
     }
 
+    if (ref.kind == PanelKind::Rdp) {
+        if (QWidget* w = m_workspace->takeRdp(ref.sessionId)) {
+            if (RdpPane* rdp = m_rdpPanes.take(ref.sessionId)) {
+                Q_UNUSED(w);
+                rdp->disconnectSession();
+                rdp->deleteLater();
+            } else {
+                w->deleteLater();
+            }
+        } else if (RdpPane* rdp = m_rdpPanes.take(ref.sessionId)) {
+            rdp->disconnectSession();
+            rdp->deleteLater();
+        }
+        if (!m_workspace->hasAttachedSessions()) {
+            showDashboard();
+        }
+        m_topNav->refresh();
+        return;
+    }
+
     closeLiveSession(ref.sessionId);
 }
 
@@ -912,6 +992,10 @@ void MainWindow::savePanelProfile(const PanelRef& ref)
     }
     if (SftpWindow* sftp = m_sftpPanes.value(ref.sessionId)) {
         m_dashboard->saveSessionProfile(sftp->profile());
+        return;
+    }
+    if (RdpPane* rdp = m_rdpPanes.value(ref.sessionId)) {
+        m_dashboard->saveSessionProfile(rdp->profile());
     }
 }
 
@@ -922,6 +1006,13 @@ void MainWindow::closeLiveSession(const QString& id)
     }
     if (SftpWindow* pane = m_sftpPanes.take(id)) {
         pane->deleteLater();
+    }
+    if (QWidget* rdp = m_workspace->takeRdp(id)) {
+        rdp->deleteLater();
+    }
+    if (RdpPane* rdpPane = m_rdpPanes.take(id)) {
+        rdpPane->disconnectSession();
+        rdpPane->deleteLater();
     }
     if (QWidget* term = m_workspace->takeTerminal(id)) {
         term->deleteLater();

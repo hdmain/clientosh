@@ -8,7 +8,8 @@ inline const char kClientoshPanelMime[] = "application/x-clientosh-panel";
 
 enum class PanelKind {
     Terminal,
-    Sftp
+    Sftp,
+    Rdp
 };
 
 enum class DockEdge {
@@ -27,13 +28,28 @@ struct PanelRef {
 
     QString key() const
     {
-        return (kind == PanelKind::Terminal ? QStringLiteral("term:") : QStringLiteral("sftp:"))
-            + sessionId;
+        switch (kind) {
+        case PanelKind::Terminal:
+            return QStringLiteral("term:") + sessionId;
+        case PanelKind::Sftp:
+            return QStringLiteral("sftp:") + sessionId;
+        case PanelKind::Rdp:
+            return QStringLiteral("rdp:") + sessionId;
+        }
+        return {};
     }
 
     QString titleHint() const
     {
-        return kind == PanelKind::Sftp ? QStringLiteral("sftp") : QStringLiteral("term");
+        switch (kind) {
+        case PanelKind::Sftp:
+            return QStringLiteral("sftp");
+        case PanelKind::Rdp:
+            return QStringLiteral("rdp");
+        case PanelKind::Terminal:
+        default:
+            return QStringLiteral("term");
+        }
     }
 
     static PanelRef terminal(const QString& sessionId)
@@ -46,6 +62,11 @@ struct PanelRef {
         return {PanelKind::Sftp, sessionId};
     }
 
+    static PanelRef rdp(const QString& sessionId)
+    {
+        return {PanelKind::Rdp, sessionId};
+    }
+
     static PanelRef fromKey(const QString& key)
     {
         if (key.startsWith(QStringLiteral("term:"))) {
@@ -53,6 +74,9 @@ struct PanelRef {
         }
         if (key.startsWith(QStringLiteral("sftp:"))) {
             return sftp(key.mid(5));
+        }
+        if (key.startsWith(QStringLiteral("rdp:"))) {
+            return rdp(key.mid(4));
         }
         return {};
     }

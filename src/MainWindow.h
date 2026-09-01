@@ -18,6 +18,7 @@ class SessionWorkspace;
 class TerminalWidget;
 class TopNavBar;
 class SftpWindow;
+class RdpPane;
 class AiAgentBridge;
 class QHBoxLayout;
 
@@ -48,6 +49,8 @@ private:
     void openProfileSession(const SessionProfile& profile);
     void openProfileThenSftp(const SessionProfile& profile);
     void openProfileSftpOnly(const SessionProfile& profile);
+    void openRdpSession(const SessionProfile& profile);
+    void createRdpPane(const QString& panelId, const SessionProfile& profile);
     /** Mount terminal, layout for real size, then start SSH with matching PTY. */
     QString beginTerminalSession(const SessionProfile& profile, bool openSftpWhenConnected);
     void openOrFocusSession(const QString& id);
@@ -79,6 +82,7 @@ private:
     AiAgentBridge* m_aiBridge = nullptr;
     QWidget* m_aiPanel = nullptr;
     QHash<QString, SftpWindow*> m_sftpPanes;
+    QHash<QString, RdpPane*> m_rdpPanes;
     QHash<QString, QProgressDialog*> m_xmodemProgressDialogs;
     QString m_pendingSftpSessionId;
     QSet<QString> m_sftpOnlySessionIds;

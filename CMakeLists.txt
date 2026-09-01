@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+# Avoid moc_predefs.h generation (broken on Windows when preprocessor output is piped).
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.27")
+    set(CMAKE_AUTOMOC_COMPILER_PREDEFINES OFF)
+endif()
 
 include(GNUInstallDirs)
 include(CTest)
@@ -174,6 +178,102 @@ if(NOT CLIENTOSH_LIBSSH_TARGET)
     set(CLIENTOSH_LIBSSH_TARGET clientosh_libssh)
 endif()
 
+# ---- FreeRDP (embedded RDP client) ------------------------------------------
+set(FREERDP_ROOT "" CACHE PATH "Optional FreeRDP install prefix (include/ + lib/)")
+if(NOT FREERDP_ROOT AND LIBSSH_ROOT)
+    set(FREERDP_ROOT "${LIBSSH_ROOT}")
+endif()
+
+set(_freerdp_hints)
+if(FREERDP_ROOT)
+    list(APPEND _freerdp_hints "${FREERDP_ROOT}")
+endif()
+if(WIN32)
+    list(APPEND _freerdp_hints "C:/msys64/mingw64" "C:/msys64/ucrt64")
+elseif(APPLE)
+    list(APPEND _freerdp_hints "/opt/homebrew" "/usr/local")
+endif()
+
+find_path(FREERDP3_INCLUDE_DIR
+    NAMES freerdp/freerdp.h
+    HINTS ${_freerdp_hints}
+    PATH_SUFFIXES freerdp3 include/freerdp3
+)
+find_path(FREERDP2_INCLUDE_DIR
+    NAMES freerdp/freerdp.h
+    HINTS ${_freerdp_hints}
+    PATH_SUFFIXES freerdp2 include/freerdp2
+)
+find_path(WINPR3_INCLUDE_DIR
+    NAMES winpr/wtypes.h
+    HINTS ${_freerdp_hints}
+    PATH_SUFFIXES winpr3 include/winpr3
+)
+find_path(WINPR2_INCLUDE_DIR
+    NAMES winpr/wtypes.h
+    HINTS ${_freerdp_hints}
+    PATH_SUFFIXES winpr2 include/winpr2
+)
+find_library(FREERDP_CLIENT_LIBRARY
+    NAMES freerdp-client3 freerdp-client2 freerdp-client
+    HINTS ${_freerdp_hints}
+    PATH_SUFFIXES lib lib64
+)
+find_library(FREERDP_LIBRARY
+    NAMES freerdp3 freerdp2 freerdp
+    HINTS ${_freerdp_hints}
+    PATH_SUFFIXES lib lib64
+)
+find_library(WINPR_LIBRARY
+    NAMES winpr3 winpr2 winpr
+    HINTS ${_freerdp_hints}
+    PATH_SUFFIXES lib lib64
+)
+
+if(FREERDP3_INCLUDE_DIR AND WINPR3_INCLUDE_DIR)
+    set(CLIENTOSH_FREERDP_INCLUDE_DIRS "${FREERDP3_INCLUDE_DIR}" "${WINPR3_INCLUDE_DIR}")
+elseif(FREERDP2_INCLUDE_DIR AND WINPR2_INCLUDE_DIR)
+    set(CLIENTOSH_FREERDP_INCLUDE_DIRS "${FREERDP2_INCLUDE_DIR}" "${WINPR2_INCLUDE_DIR}")
+else()
+    set(CLIENTOSH_FREERDP_INCLUDE_DIRS "")
+endif()
+
+if(CLIENTOSH_FREERDP_INCLUDE_DIRS STREQUAL "" OR NOT FREERDP_CLIENT_LIBRARY OR NOT FREERDP_LIBRARY OR NOT WINPR_LIBRARY)
+    message(FATAL_ERROR
+        "FreeRDP development libraries not found.\n"
+        "  Windows (MSYS2): pacman -S mingw-w64-x86_64-freerdp\n"
+        "  Debian/Ubuntu:   apt install freerdp2-dev\n"
+        "  Fedora:          dnf install freerdp-devel\n"
+        "  macOS:           brew install freerdp\n"
+        "Set FREERDP_ROOT to the install prefix if needed.")
+endif()
+
+add_library(clientosh_freerdp OBJECT
+    src/core/RdpSession.cpp
+    src/core/RdpKeyboardCapture.cpp
+    src/core/RdpClipboard.cpp
+    src/RdpView.cpp
+)
+target_include_directories(clientosh_freerdp PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
+foreach(_rdp_inc IN LISTS CLIENTOSH_FREERDP_INCLUDE_DIRS)
+    target_compile_options(clientosh_freerdp PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-I${_rdp_inc}>")
+endforeach()
+target_link_libraries(clientosh_freerdp PUBLIC Qt6::Widgets clientosh_freerdp_libs)
+set_target_properties(clientosh_freerdp PROPERTIES AUTOMOC OFF AUTOUIC OFF)
+
+add_library(clientosh_freerdp_libs INTERFACE)
+target_link_libraries(clientosh_freerdp_libs INTERFACE
+    "${FREERDP_CLIENT_LIBRARY}"
+    "${FREERDP_LIBRARY}"
+    "${WINPR_LIBRARY}"
+)
+message(STATUS "FreeRDP includes: ${CLIENTOSH_FREERDP_INCLUDE_DIRS}")
+message(STATUS "FreeRDP client lib: ${FREERDP_CLIENT_LIBRARY}")
+
 add_executable(clientosh
     src/main.cpp
     src/MainWindow.h
@@ -205,6 +305,10 @@ add_executable(clientosh
     src/core/KeyringAdapter.cpp
     src/core/NetworkProxyManager.h
     src/core/NetworkProxyManager.cpp
+    src/core/RdpSession.h
+    src/RdpView.h
+    src/RdpPane.h
+    src/RdpPane.cpp
     src/core/VaultManager.h
     src/core/VaultManager.cpp
     src/core/CliLaunch.h
@@ -278,7 +382,10 @@ target_link_libraries(clientosh PRIVATE
     Qt6::Svg
     ${CLIENTOSH_LIBSSH_TARGET}
     ${CLIENTOSH_OPENSSL_TARGET}
+    clientosh_freerdp_libs
 )
+
+target_sources(clientosh PRIVATE $<TARGET_OBJECTS:clientosh_freerdp>)
 
 # ---- AI agent addon (lazy-loaded MODULE; not linked into clientosh) --------
 add_library(clientosh_addon_ai_agent MODULE
@@ -388,6 +495,12 @@ if(WIN32)
     if(LIBSSH_ROOT)
         set(_dll_candidates
             libssh.dll
+            libfreerdp3.dll
+            libfreerdp-client3.dll
+            libwinpr3.dll
+            libfreerdp2.dll
+            libfreerdp-client2.dll
+            libwinpr2.dll
             libcrypto-3-x64.dll
             libssl-3-x64.dll
             libcrypto-3.dll
@@ -408,6 +521,16 @@ if(WIN32)
                 )
             endif()
         endforeach()
+    endif()
+
+    if(FREERDP_ROOT AND EXISTS "${FREERDP_ROOT}/bin")
+        add_custom_command(TARGET clientosh POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                -DFREERDP_BIN_DIR=${FREERDP_ROOT}/bin
+                -DDEST_DIR=$<TARGET_FILE_DIR:clientosh>
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/bundle_freerdp_runtime.cmake"
+            VERBATIM
+        )
     endif()
 
     # Bundle the Qt6 runtime DLLs and the MinGW C++ runtime so the exe launches
