@@ -1,5 +1,6 @@
 #include "SftpCrossTransfer.h"
 #include "core/AppSettings.h"
+#include "core/NetworkProxyManager.h"
 #include "core/PrivateKeyLoader.h"
 #include "core/SshPasswordAuth.h"
 
@@ -91,7 +92,8 @@ QString SftpCrossTransfer::sftpError(void* sessVoid, void* sftpVoid) const
     return QStringLiteral("%1 (%2)").arg(fx).arg(code);
 }
 
-bool SftpCrossTransfer::connectSftp(const SessionProfile& profile, void** sessionOut, void** sftpOut, QString* errOut)
+bool SftpCrossTransfer::connectSftp(const SessionProfile& profile, void** sessionOut,
+                                    void** sftpOut, SshProxyTunnel* tunnelOut, QString* errOut)
 {
     ssh_session session = ssh_new();
     if (!session) {
@@ -114,8 +116,21 @@ bool SftpCrossTransfer::connectSftp(const SessionProfile& profile, void** sessio
     int logLevel = m_verbose ? SSH_LOG_PROTOCOL : SSH_LOG_NOLOG;
     ssh_options_set(session, SSH_OPTIONS_LOG_VERBOSITY, &logLevel);
 
+    SshProxyTunnel tunnel;
+    QString tunnelError;
+    if (!NetworkProxy::openSshTunnel(profile.host, port, &tunnel, &tunnelError)) {
+        if (errOut) {
+            *errOut = tunnelError;
+        }
+        ssh_free(session);
+        return false;
+    }
+    if (tunnel.socket) {
+        NetworkProxy::applyTunnelToSshSession(session, tunnel);
+    }
+
     if (ssh_connect(session) != SSH_OK) {
-        const QString e = QString::fromUtf8(ssh_get_error(session));
+        const QString e = NetworkProxy::sshConnectErrorMessage(session);
         if (errOut) {
             *errOut = QStringLiteral("ssh_connect to %1:%2 failed: %3").arg(profile.host).arg(port).arg(e);
         }
@@ -186,10 +201,13 @@ bool SftpCrossTransfer::connectSftp(const SessionProfile& profile, void** sessio
     }
     *sessionOut = session;
     *sftpOut = sftp;
+    if (tunnelOut) {
+        *tunnelOut = std::move(tunnel);
+    }
     return true;
 }
 
-void SftpCrossTransfer::cleanupSftp(void* session, void* sftp)
+void SftpCrossTransfer::cleanupSftp(void* session, void* sftp, SshProxyTunnel* tunnel)
 {
     if (sftp) {
         sftp_free(static_cast<sftp_session>(sftp));
@@ -198,6 +216,9 @@ void SftpCrossTransfer::cleanupSftp(void* session, void* sftp)
         auto* s = static_cast<ssh_session>(session);
         ssh_disconnect(s);
         ssh_free(s);
+    }
+    if (tunnel) {
+        *tunnel = {};
     }
 }
 
@@ -463,28 +484,30 @@ void SftpCrossTransfer::startTransfer(const SessionProfile& sourceProfile,
 
     void* srcSession = nullptr;
     void* srcSftp = nullptr;
+    SshProxyTunnel srcTunnel;
     QString err;
-    if (!connectSftp(sourceProfile, &srcSession, &srcSftp, &err)) {
+    if (!connectSftp(sourceProfile, &srcSession, &srcSftp, &srcTunnel, &err)) {
         emit finished(false, QStringLiteral("source connect failed: %1").arg(err));
         return;
     }
     if (isCancelled()) {
-        cleanupSftp(srcSession, srcSftp);
+        cleanupSftp(srcSession, srcSftp, &srcTunnel);
         emit finished(false, QStringLiteral("cancelled"));
         return;
     }
 
     void* dstSession = nullptr;
     void* dstSftp = nullptr;
-    if (!connectSftp(destProfile, &dstSession, &dstSftp, &err)) {
-        cleanupSftp(srcSession, srcSftp);
+    SshProxyTunnel dstTunnel;
+    if (!connectSftp(destProfile, &dstSession, &dstSftp, &dstTunnel, &err)) {
+        cleanupSftp(srcSession, srcSftp, &srcTunnel);
         emit finished(false, QStringLiteral("destination connect failed: %1").arg(err));
         return;
     }
 
     if (!mkdirP(dstSftp, destNorm)) {
-        cleanupSftp(srcSession, srcSftp);
-        cleanupSftp(dstSession, dstSftp);
+        cleanupSftp(srcSession, srcSftp, &srcTunnel);
+        cleanupSftp(dstSession, dstSftp, &dstTunnel);
         emit finished(false, QStringLiteral("cannot create destination folder '%1'").arg(destNorm));
         return;
     }
@@ -545,8 +568,8 @@ void SftpCrossTransfer::startTransfer(const SessionProfile& sourceProfile,
         }
     }
 
-    cleanupSftp(srcSession, srcSftp);
-    cleanupSftp(dstSession, dstSftp);
+    cleanupSftp(srcSession, srcSftp, &srcTunnel);
+    cleanupSftp(dstSession, dstSftp, &dstTunnel);
 
     // Best-effort cleanup of staging (remove temp files). Keep on failure for debugging? No — always clean.
     {

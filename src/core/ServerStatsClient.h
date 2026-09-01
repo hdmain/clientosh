@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SessionProfile.h"
+#include "NetworkProxyManager.h"
 
 #include <QObject>
 #include <QtGlobal>
@@ -48,6 +49,7 @@ private:
     void* m_session = nullptr; // ssh_session
     bool m_connected = false;
     QTimer* m_timer = nullptr;
+    SshProxyTunnel m_proxyTunnel;
 
     bool m_havePrevCpu = false;
     quint64 m_prevIdle = 0;

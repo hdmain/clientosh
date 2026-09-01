@@ -50,6 +50,7 @@ public:
     void refresh();
     void showNewSessionForm();
     void showSettings();
+    void showProxy();
     void showHome();
     void appendLog(const QString& line);
     void syncTerminalFontSizeUi(int points);
@@ -83,6 +84,7 @@ private:
         Keychain,
         Notes,
         Logs,
+        Proxy,
         Settings,
         Form
     };
@@ -131,6 +133,7 @@ private:
     void saveCurrentFormAsProfile();
     void connectFromForm();
     void loadSettingsUi();
+    void loadProxyUi();
     void saveSettingsUi();
     void setSettingsCategory(int index);
     void populateFontCombos();
@@ -143,6 +146,8 @@ private:
     void syncColorSwatch(QAbstractButton* btn, const QColor& color);
     void pickTerminalColor(bool foreground);
     void persistShortcutsLive();
+    void persistProxyLive();
+    void updateProxyFieldsEnabled();
     void resetShortcutsToDefaults();
     void setNavPage(NavPage page);
     void browsePrivateKey();
@@ -180,6 +185,7 @@ private:
     QToolButton* m_navKeys = nullptr;
     QToolButton* m_navNotes = nullptr;
     QToolButton* m_navLogs = nullptr;
+    QToolButton* m_navProxy = nullptr;
     QToolButton* m_navSettings = nullptr;
     QLabel* m_activeBadge = nullptr;
 
@@ -194,6 +200,7 @@ private:
     QWidget* m_keysPage = nullptr;
     QWidget* m_notesPage = nullptr;
     QWidget* m_logsPage = nullptr;
+    QWidget* m_proxyPage = nullptr;
     QWidget* m_settingsPage = nullptr;
     QWidget* m_formPage = nullptr;
 
@@ -309,6 +316,14 @@ private:
     QCheckBox* m_enableFontLarger = nullptr;
     QCheckBox* m_enableFontSmaller = nullptr;
     QCheckBox* m_enableFontReset = nullptr;
+
+    QCheckBox* m_settingsProxyEnabled = nullptr;
+    QComboBox* m_settingsProxyProtocol = nullptr;
+    QLineEdit* m_settingsProxyHost = nullptr;
+    QSpinBox* m_settingsProxyPort = nullptr;
+    QCheckBox* m_settingsProxyAuth = nullptr;
+    QLineEdit* m_settingsProxyUser = nullptr;
+    QLineEdit* m_settingsProxyPass = nullptr;
 
     // ---- Sync (GitHub Gist) -------------------------------------------------
     SyncController* m_sync = nullptr;

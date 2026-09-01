@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SessionProfile.h"
+#include "NetworkProxyManager.h"
 
 #include <QThread>
 #include <QMutex>
@@ -79,4 +80,5 @@ private:
 
     ssh_session m_session = nullptr;
     ssh_channel m_channel = nullptr;
+    SshProxyTunnel m_proxyTunnel;
 };

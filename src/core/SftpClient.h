@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SessionProfile.h"
+#include "NetworkProxyManager.h"
 
 #include <QAtomicInteger>
 #include <QObject>
@@ -67,6 +68,7 @@ private:
 
     void* m_session = nullptr; // ssh_session
     void* m_sftp = nullptr;    // sftp_session
+    SshProxyTunnel m_proxyTunnel;
     QString m_cwd;
     bool m_connected = false;
     bool m_verbose = false;

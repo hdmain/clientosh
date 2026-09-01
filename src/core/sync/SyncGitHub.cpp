@@ -1,5 +1,7 @@
 #include "SyncGitHub.h"
 
+#include "NetworkProxyManager.h"
+
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -51,6 +53,7 @@ QByteArray fetchGistFileContent(const QJsonObject& file, const QString& token,
     const QString rawUrl = file.value(QStringLiteral("raw_url")).toString();
     if (truncated && !rawUrl.isEmpty()) {
         QNetworkAccessManager nam;
+        NetworkProxy::configureDirectAccess(&nam);
         QNetworkRequest req{QUrl(rawUrl)};
         req.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("clientosh-sync/1.0"));
@@ -87,6 +90,7 @@ bool SyncGitHub::perform(const QByteArray& method, const QString& url,
                          QByteArray& errorOut)
 {
     QNetworkAccessManager nam;
+    NetworkProxy::configureDirectAccess(&nam);
     QUrl qurl(url);
     QNetworkRequest req(qurl);
     req.setHeader(QNetworkRequest::UserAgentHeader,

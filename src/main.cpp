@@ -3,6 +3,7 @@
 #include "core/AppSettings.h"
 #include "core/CliLaunch.h"
 #include "core/FontManager.h"
+#include "core/NetworkProxyManager.h"
 #include "ui/Motion.h"
 
 #include <libssh/libssh.h>
@@ -211,6 +212,8 @@ int main(int argc, char* argv[])
     app.setApplicationName(QStringLiteral("clientosh"));
     app.setOrganizationName(QStringLiteral("clientosh"));
     app.setWindowIcon(QIcon(QStringLiteral(":/icons/terminal.svg")));
+
+    NetworkProxy::applyApplicationProxy();
 
     if (verbose) {
         AppSettings::setSftpVerboseLogging(true);

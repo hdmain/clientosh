@@ -69,6 +69,7 @@
 - **🖥️ Hand-rolled VT100/xterm emulator** - full scrollback buffer, 256-color + true SGR attributes, alt-screen, mouse reporting & tracking, box-drawing glyphs, DEC character sets, and live keyword/address highlighting - all in pure Qt widgets.
 - **📁 Bundled SFTP file manager** - browse, upload, download, and delete remote files for the active session, with details/compact views.
 - **🔀 Server-to-server SFTP transfer** - move files **directly between two remote hosts** through a temporary staging area, with per-file progress, verbose logging, and an atomic cancel that cleans up after itself.
+- **🌐 Proxy routing** - optional HTTP, SOCKS4, or SOCKS5 proxy for SSH, SFTP, and general HTTP traffic (updates, fonts, addon catalog). GitHub Gist sync always bypasses the proxy and connects directly.
 - **📊 Live server stats** - per-session CPU / RAM / disk readouts pushed over a dedicated SSH channel on a configurable interval.
 - **🪟 Detach & re-attach** - pull a terminal out into its own viewport, then dock it right back into the workspace.
 - **🎨 Raw dark UI with motion** - flat, high-contrast monospace theme with subtle eased glows and hover fills (`src/ui/Motion`), plus a light theme, adjustable fonts, and optional blurred background images.
@@ -362,6 +363,25 @@ When two SFTP sessions are open, move files **between servers** without ever tou
 Enable verbose mode with **Settings → SFTP → verbose logging**.
 </details>
 
+### 6. Proxy
+
+Open the **Proxy** tab in the sidebar (between Logs and Settings) to route network traffic through a corporate or local proxy.
+
+| Field | Description |
+|---|---|
+| **Enable proxy** | Master toggle; when off, all connections go direct |
+| **Protocol** | `HTTP`, `SOCKS4`, or `SOCKS5` |
+| **Host / Port** | Proxy server address (default port suggestion: `8080`) |
+| **Authentication** | Optional username and password (password stored in the OS keyring, not the INI file) |
+
+When enabled:
+
+- **SSH / SFTP** sessions tunnel through the proxy via a manual SOCKS/HTTP CONNECT handshake, then hand the socket to libssh.
+- **HTTP clients** (release checks, font downloads, addon catalog) use `QNetworkProxy::setApplicationProxy()`.
+- **GitHub Gist sync** always uses a direct connection (`QNetworkProxy::NoProxy`) regardless of this setting.
+
+Changes apply immediately as you edit the fields; reconnect open sessions to pick up a new proxy configuration.
+
 ### Keyboard shortcuts (all remappable)
 
 | Action | Default |
@@ -486,6 +506,12 @@ Settings are persisted as an INI file via Qt's `QSettings` (e.g. `%APPDATA%/clie
 | `settings/highlightLogKeywords` | `bool` | `true` | Highlight log keywords in terminal |
 | `settings/ctrlScrollFontZoom` | `bool` | `true` | `Ctrl` + scroll zooms the font |
 | `settings/defaultHost` / `defaultUser` / `defaultPort` | - | `127.0.0.1` / - / `22` | Prefill for the new-session dialog |
+| `settings/proxyEnabled` | `bool` | `false` | Route SSH/SFTP and HTTP through a proxy |
+| `settings/proxyProtocol` | `int` | `2` (SOCKS5) | `0` = HTTP, `1` = SOCKS4, `2` = SOCKS5 |
+| `settings/proxyHost` | `string` | - | Proxy hostname or IP |
+| `settings/proxyPort` | `int` | `8080` | Proxy port (1–65535) |
+| `settings/proxyAuthEnabled` | `bool` | `false` | Send proxy username/password |
+| `settings/proxyUsername` | `string` | - | Proxy username (password in keyring) |
 | `shortcut*` | `string` | see table | Every shortcut + its enable flag |
 
 <br/>
@@ -506,6 +532,7 @@ Settings are persisted as an INI file via Qt's `QSettings` (e.g. `%APPDATA%/clie
 - [x] Password auth with keyboard-interactive fallback
 - [x] Addon marketplace (install from catalog)
 - [x] AI agent addon (OpenAI-compatible terminal agent)
+- [x] Client-side proxy routing (HTTP / SOCKS4 / SOCKS5; Gist sync bypass)
 - [ ] **Host-key verification** (see security note below)
 - [ ] SSH agent forwarding / SOCKS proxy / TCP forwarding
 - [ ] Multi-host broadcast / scripted command sender

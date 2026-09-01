@@ -1,5 +1,6 @@
 #include "SshSession.h"
 
+#include "NetworkProxyManager.h"
 #include "PrivateKeyLoader.h"
 #include "SshPasswordAuth.h"
 
@@ -226,6 +227,7 @@ void SshSession::cleanup()
         ssh_disconnect(session);
         ssh_free(session);
     }
+    m_proxyTunnel = {};
 }
 
 bool SshSession::authenticate(const QString& password,
@@ -372,6 +374,17 @@ void SshSession::run()
         int strict = 0;
         ssh_options_set(session, SSH_OPTIONS_STRICTHOSTKEYCHECK, &strict);
 
+        m_proxyTunnel = {};
+        QString tunnelError;
+        if (!NetworkProxy::openSshTunnel(host, port, &m_proxyTunnel, &tunnelError)) {
+            cleanup();
+            emit errorOccurred(tunnelError);
+            break;
+        }
+        if (m_proxyTunnel.socket) {
+            NetworkProxy::applyTunnelToSshSession(session, m_proxyTunnel);
+        }
+
         if (stopRequested()) {
             cleanup();
             break;
@@ -379,7 +392,7 @@ void SshSession::run()
 
         if (ssh_connect(session) != SSH_OK) {
             const bool cancelled = stopRequested();
-            const QString err = QString::fromUtf8(ssh_get_error(session));
+            const QString err = NetworkProxy::sshConnectErrorMessage(session);
             cleanup();
             if (!cancelled) {
                 emit errorOccurred(QStringLiteral("connect failed: %1").arg(err));

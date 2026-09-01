@@ -1,6 +1,7 @@
 #include "SftpClient.h"
 
 #include "core/AppSettings.h"
+#include "core/NetworkProxyManager.h"
 #include "core/PrivateKeyLoader.h"
 #include "core/SshPasswordAuth.h"
 
@@ -263,6 +264,7 @@ void SftpClient::cleanup()
         ssh_free(session);
         m_session = nullptr;
     }
+    m_proxyTunnel = {};
     m_connected = false;
     m_cwd.clear();
 }
@@ -371,11 +373,23 @@ void SftpClient::connectHost(const SessionProfile& profile)
     int logLevel = m_verbose ? SSH_LOG_PROTOCOL : SSH_LOG_NOLOG;
     ssh_options_set(session, SSH_OPTIONS_LOG_VERBOSITY, &logLevel);
 
+    m_proxyTunnel = {};
+    QString tunnelError;
+    if (!NetworkProxy::openSshTunnel(profile.host, port, &m_proxyTunnel, &tunnelError)) {
+        vlog(tunnelError);
+        cleanup();
+        emit errorOccurred(tunnelError);
+        return;
+    }
+    if (m_proxyTunnel.socket) {
+        NetworkProxy::applyTunnelToSshSession(session, m_proxyTunnel);
+    }
+
     vlog(QStringLiteral("connectHost: ssh_connect timeout=%1s kex=classic strictHostKeyCheck=off logLevel=%2")
              .arg(timeoutSec)
              .arg(logLevel));
     if (ssh_connect(session) != SSH_OK) {
-        const QString err = QString::fromUtf8(ssh_get_error(session));
+        const QString err = NetworkProxy::sshConnectErrorMessage(session);
         vlog(QStringLiteral("connectHost: ssh_connect failed: %1").arg(err));
         cleanup();
         emit errorOccurred(QStringLiteral("connect failed to %1:%2 — %3").arg(profile.host).arg(port).arg(err));

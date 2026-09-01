@@ -1,5 +1,6 @@
 #include "ServerStatsClient.h"
 #include "AppSettings.h"
+#include "NetworkProxyManager.h"
 #include "PrivateKeyLoader.h"
 #include "SshPasswordAuth.h"
 
@@ -56,6 +57,7 @@ void ServerStatsClient::cleanup()
     m_havePrevCpu = false;
     m_prevIdle = 0;
     m_prevTotal = 0;
+    m_proxyTunnel = {};
 }
 
 bool ServerStatsClient::authenticate(const SessionProfile& profile, QString* errorOut)
@@ -135,8 +137,19 @@ void ServerStatsClient::start(const SessionProfile& profile)
     int strict = 0;
     ssh_options_set(session, SSH_OPTIONS_STRICTHOSTKEYCHECK, &strict);
 
+    m_proxyTunnel = {};
+    QString tunnelError;
+    if (!NetworkProxy::openSshTunnel(profile.host, port, &m_proxyTunnel, &tunnelError)) {
+        cleanup();
+        emit failed(tunnelError);
+        return;
+    }
+    if (m_proxyTunnel.socket) {
+        NetworkProxy::applyTunnelToSshSession(session, m_proxyTunnel);
+    }
+
     if (ssh_connect(session) != SSH_OK) {
-        const QString err = QString::fromUtf8(ssh_get_error(session));
+        const QString err = NetworkProxy::sshConnectErrorMessage(session);
         cleanup();
         emit failed(QStringLiteral("stats connect failed: %1").arg(err));
         return;

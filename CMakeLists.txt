@@ -203,6 +203,8 @@ add_executable(clientosh
     src/core/CryptoEngine.cpp
     src/core/KeyringAdapter.h
     src/core/KeyringAdapter.cpp
+    src/core/NetworkProxyManager.h
+    src/core/NetworkProxyManager.cpp
     src/core/VaultManager.h
     src/core/VaultManager.cpp
     src/core/CliLaunch.h

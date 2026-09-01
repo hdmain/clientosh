@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SessionProfile.h"
+#include "NetworkProxyManager.h"
 
 #include <QAtomicInteger>
 #include <QObject>
@@ -41,8 +42,9 @@ signals:
     void verboseProgress(const QString& label);
 
 private:
-    bool connectSftp(const SessionProfile& profile, void** sessionOut, void** sftpOut, QString* errOut);
-    void cleanupSftp(void* session, void* sftp);
+    bool connectSftp(const SessionProfile& profile, void** sessionOut, void** sftpOut,
+                     SshProxyTunnel* tunnelOut, QString* errOut);
+    void cleanupSftp(void* session, void* sftp, SshProxyTunnel* tunnel);
     bool downloadFile(void* sftp, const QString& remote, const QString& local);
     bool downloadDir(void* sftp, const QString& remoteDir, const QString& localDir);
     bool uploadFile(void* sftp, const QString& local, const QString& remote);

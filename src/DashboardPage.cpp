@@ -3,6 +3,7 @@
 #include "version.h"
 #include "core/AppSettings.h"
 #include "core/FontManager.h"
+#include "core/NetworkProxyManager.h"
 #include "core/SessionManager.h"
 #include "core/SerialSession.h"
 #include "core/sync/SyncConfig.h"
@@ -610,12 +611,14 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     m_navKeys = makeSidebarNav(QStringLiteral(":/icons/key.svg"), QStringLiteral("SSH Keys"), m_sidebar);
     m_navNotes = makeSidebarNav(QStringLiteral(":/icons/notes.svg"), QStringLiteral("Notes"), m_sidebar);
     m_navLogs = makeSidebarNav(QStringLiteral(":/icons/logs.svg"), QStringLiteral("Logs"), m_sidebar);
+    m_navProxy = makeSidebarNav(QStringLiteral(":/icons/connect.svg"), QStringLiteral("Proxy"), m_sidebar);
     m_navSettings = makeSidebarNav(QStringLiteral(":/icons/settings.svg"), QStringLiteral("Settings"), m_sidebar);
 
     m_navGroup->addButton(m_navHosts, static_cast<int>(NavPage::Hosts));
     m_navGroup->addButton(m_navKeys, static_cast<int>(NavPage::Keychain));
     m_navGroup->addButton(m_navNotes, static_cast<int>(NavPage::Notes));
     m_navGroup->addButton(m_navLogs, static_cast<int>(NavPage::Logs));
+    m_navGroup->addButton(m_navProxy, static_cast<int>(NavPage::Proxy));
     m_navGroup->addButton(m_navSettings, static_cast<int>(NavPage::Settings));
 
     sideLay->addWidget(m_navHosts);
@@ -637,6 +640,7 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     sideLay->addWidget(m_navKeys);
     sideLay->addWidget(m_navNotes);
     sideLay->addWidget(m_navLogs);
+    sideLay->addWidget(m_navProxy);
     sideLay->addStretch(1);
     sideLay->addWidget(m_navSettings);
 
@@ -935,6 +939,88 @@ DashboardPage::DashboardPage(SessionManager* sessions, QWidget* parent)
     logsRow->addWidget(clearLogs);
     logsLay->addLayout(logsRow);
     m_stack->addWidget(m_logsPage);
+
+    // ---- Proxy page ----
+    {
+        m_proxyPage = new QWidget;
+        auto* proxyOuter = new QVBoxLayout(m_proxyPage);
+        proxyOuter->setContentsMargins(0, 0, 0, 0);
+        proxyOuter->setSpacing(0);
+
+        auto* scroll = new QScrollArea(m_proxyPage);
+        scroll->setObjectName(QStringLiteral("settingsScroll"));
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+        QWidget* sec = buildSettingsSection(QStringLiteral("Proxy configuration"), scroll);
+        auto* pLay = qobject_cast<QVBoxLayout*>(sec->layout());
+
+        m_settingsProxyEnabled = new QCheckBox(QStringLiteral("Enable proxy"), sec);
+        pLay->addWidget(m_settingsProxyEnabled);
+
+        m_settingsProxyProtocol = new QComboBox(sec);
+        m_settingsProxyProtocol->addItem(QStringLiteral("HTTP"), int(AppSettings::ProxyProtocol::Http));
+        m_settingsProxyProtocol->addItem(QStringLiteral("SOCKS4"), int(AppSettings::ProxyProtocol::Socks4));
+        m_settingsProxyProtocol->addItem(QStringLiteral("SOCKS5"), int(AppSettings::ProxyProtocol::Socks5));
+        addSettingsField(sec, QStringLiteral("Protocol"), m_settingsProxyProtocol);
+
+        m_settingsProxyHost = new QLineEdit(sec);
+        m_settingsProxyHost->setPlaceholderText(QStringLiteral("proxy.example.com"));
+        addSettingsField(sec, QStringLiteral("Host"), m_settingsProxyHost);
+
+        m_settingsProxyPort = new QSpinBox(sec);
+        m_settingsProxyPort->setRange(1, 65535);
+        m_settingsProxyPort->setValue(8080);
+        addSettingsField(sec, QStringLiteral("Port"), m_settingsProxyPort);
+
+        pLay->addSpacing(8);
+        m_settingsProxyAuth = new QCheckBox(QStringLiteral("Proxy requires authentication"), sec);
+        pLay->addWidget(m_settingsProxyAuth);
+
+        m_settingsProxyUser = new QLineEdit(sec);
+        m_settingsProxyUser->setPlaceholderText(QStringLiteral("username"));
+        addSettingsField(sec, QStringLiteral("Username"), m_settingsProxyUser);
+
+        m_settingsProxyPass = new QLineEdit(sec);
+        m_settingsProxyPass->setEchoMode(QLineEdit::Password);
+        m_settingsProxyPass->setPlaceholderText(QStringLiteral("password"));
+        ui::attachPasswordReveal(m_settingsProxyPass);
+        addSettingsField(sec, QStringLiteral("Password"), m_settingsProxyPass);
+
+        auto* proxyHint = new QLabel(
+            QStringLiteral(
+                "When enabled, SSH/SFTP sessions and general HTTP traffic (updates, fonts, addons) "
+                "route through this proxy. GitHub Gist sync always connects directly, bypassing the proxy."),
+            sec);
+        proxyHint->setObjectName(QStringLiteral("dashHint"));
+        proxyHint->setWordWrap(true);
+        pLay->addSpacing(6);
+        pLay->addWidget(proxyHint);
+
+        connect(m_settingsProxyEnabled, &QCheckBox::toggled, this, [this](bool) {
+            updateProxyFieldsEnabled();
+            persistProxyLive();
+        });
+        connect(m_settingsProxyProtocol, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                [this](int) { persistProxyLive(); });
+        connect(m_settingsProxyHost, &QLineEdit::textChanged, this,
+                [this](const QString&) { persistProxyLive(); });
+        connect(m_settingsProxyPort, QOverload<int>::of(&QSpinBox::valueChanged), this,
+                [this](int) { persistProxyLive(); });
+        connect(m_settingsProxyAuth, &QCheckBox::toggled, this, [this](bool) {
+            updateProxyFieldsEnabled();
+            persistProxyLive();
+        });
+        connect(m_settingsProxyUser, &QLineEdit::textChanged, this,
+                [this](const QString&) { persistProxyLive(); });
+        connect(m_settingsProxyPass, &QLineEdit::textChanged, this,
+                [this](const QString&) { persistProxyLive(); });
+
+        scroll->setWidget(sec);
+        proxyOuter->addWidget(scroll);
+        m_stack->addWidget(m_proxyPage);
+    }
 
     // ---- Settings page (categorized) ----
     m_settingsPage = new QWidget;
@@ -2824,6 +2910,55 @@ void DashboardPage::persistShortcutsLive()
     emit settingsApplied();
 }
 
+void DashboardPage::updateProxyFieldsEnabled()
+{
+    if (!m_settingsProxyEnabled) {
+        return;
+    }
+    const bool proxyOn = m_settingsProxyEnabled->isChecked();
+    const bool authOn = m_settingsProxyAuth && m_settingsProxyAuth->isChecked();
+    const QList<QWidget*> proxyFields = {
+        m_settingsProxyProtocol, m_settingsProxyHost, m_settingsProxyPort, m_settingsProxyAuth};
+    for (QWidget* w : proxyFields) {
+        if (w) {
+            w->setEnabled(proxyOn);
+        }
+    }
+    if (m_settingsProxyUser) {
+        m_settingsProxyUser->setEnabled(proxyOn && authOn);
+    }
+    if (m_settingsProxyPass) {
+        m_settingsProxyPass->setEnabled(proxyOn && authOn);
+    }
+}
+
+void DashboardPage::persistProxyLive()
+{
+    if (!m_settingsProxyEnabled || !m_settingsProxyProtocol || !m_settingsProxyHost
+        || !m_settingsProxyPort || !m_settingsProxyAuth || !m_settingsProxyUser || !m_settingsProxyPass) {
+        return;
+    }
+
+    QSettings s;
+    s.setValue(QLatin1String(AppSettings::kProxyEnabled), m_settingsProxyEnabled->isChecked());
+    s.setValue(QLatin1String(AppSettings::kProxyProtocol),
+               m_settingsProxyProtocol->currentData().toInt());
+    s.setValue(QLatin1String(AppSettings::kProxyHost), m_settingsProxyHost->text().trimmed());
+    s.setValue(QLatin1String(AppSettings::kProxyPort), m_settingsProxyPort->value());
+    s.setValue(QLatin1String(AppSettings::kProxyAuthEnabled), m_settingsProxyAuth->isChecked());
+    s.setValue(QLatin1String(AppSettings::kProxyUsername), m_settingsProxyUser->text().trimmed());
+    s.sync();
+
+    const QString pass = m_settingsProxyPass->text();
+    if (!pass.isEmpty()) {
+        NetworkProxy::storePassword(pass);
+    } else if (!m_settingsProxyAuth->isChecked()) {
+        NetworkProxy::clearPassword();
+    }
+
+    NetworkProxy::applyApplicationProxy();
+}
+
 void DashboardPage::resetShortcutsToDefaults()
 {
     const QList<QKeySequenceEdit*> edits = {
@@ -2910,6 +3045,10 @@ void DashboardPage::updateTopBar()
         m_pageTitle->setText(QStringLiteral("Logs"));
         m_pageSub->setText(QStringLiteral("recent session events"));
         break;
+    case NavPage::Proxy:
+        m_pageTitle->setText(QStringLiteral("Proxy"));
+        m_pageSub->setText(QStringLiteral("network routing for SSH, SFTP, and HTTP"));
+        break;
     case NavPage::Settings:
         m_pageTitle->setText(QStringLiteral("Settings"));
         m_pageSub->setText(QStringLiteral("preferences by category"));
@@ -2946,6 +3085,11 @@ void DashboardPage::setNavPage(NavPage page)
     case NavPage::Logs:
         m_stack->setCurrentWidget(m_logsPage);
         m_navLogs->setChecked(true);
+        break;
+    case NavPage::Proxy:
+        loadProxyUi();
+        m_stack->setCurrentWidget(m_proxyPage);
+        m_navProxy->setChecked(true);
         break;
     case NavPage::Settings:
         loadSettingsUi();
@@ -3817,6 +3961,11 @@ void DashboardPage::removeSelectedKeyringKey()
 void DashboardPage::showSettings()
 {
     setNavPage(NavPage::Settings);
+}
+
+void DashboardPage::showProxy()
+{
+    setNavPage(NavPage::Proxy);
 }
 
 int DashboardPage::profileIndexById(const QString& id) const
@@ -5022,6 +5171,35 @@ void DashboardPage::loadSettingsUi()
         m_settingsNav->setCurrentRow(0);
     }
     setSettingsCategory(m_settingsNav ? m_settingsNav->currentRow() : 0);
+}
+
+void DashboardPage::loadProxyUi()
+{
+    if (!m_settingsProxyEnabled) {
+        return;
+    }
+    const QList<QWidget*> proxyBlocks = {
+        m_settingsProxyEnabled, m_settingsProxyProtocol, m_settingsProxyHost,
+        m_settingsProxyPort, m_settingsProxyAuth, m_settingsProxyUser, m_settingsProxyPass};
+    for (QWidget* w : proxyBlocks) {
+        if (w) {
+            w->blockSignals(true);
+        }
+    }
+    m_settingsProxyEnabled->setChecked(AppSettings::proxyEnabled());
+    const int protoIdx = m_settingsProxyProtocol->findData(int(AppSettings::proxyProtocol()));
+    m_settingsProxyProtocol->setCurrentIndex(protoIdx >= 0 ? protoIdx : 2);
+    m_settingsProxyHost->setText(AppSettings::proxyHost());
+    m_settingsProxyPort->setValue(AppSettings::proxyPort());
+    m_settingsProxyAuth->setChecked(AppSettings::proxyAuthEnabled());
+    m_settingsProxyUser->setText(AppSettings::proxyUsername());
+    m_settingsProxyPass->setText(NetworkProxy::loadPassword());
+    for (QWidget* w : proxyBlocks) {
+        if (w) {
+            w->blockSignals(false);
+        }
+    }
+    updateProxyFieldsEnabled();
 }
 
 void DashboardPage::saveSettingsUi()

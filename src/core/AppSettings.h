@@ -149,6 +149,18 @@ inline constexpr const char* kShortcutFontLargerEnabled = "settings/shortcutFont
 inline constexpr const char* kShortcutFontSmallerEnabled = "settings/shortcutFontSmallerEnabled";
 inline constexpr const char* kShortcutFontResetEnabled = "settings/shortcutFontResetEnabled";
 inline constexpr const char* kAlwaysOnTop = "window/alwaysOnTop";
+inline constexpr const char* kProxyEnabled = "settings/proxyEnabled";
+inline constexpr const char* kProxyProtocol = "settings/proxyProtocol";
+inline constexpr const char* kProxyHost = "settings/proxyHost";
+inline constexpr const char* kProxyPort = "settings/proxyPort";
+inline constexpr const char* kProxyAuthEnabled = "settings/proxyAuthEnabled";
+inline constexpr const char* kProxyUsername = "settings/proxyUsername";
+
+enum class ProxyProtocol {
+    Http = 0,
+    Socks4 = 1,
+    Socks5 = 2
+};
 
 inline QColor colorFromSetting(const char* key, const QColor& fallback)
 {
@@ -568,6 +580,71 @@ inline QStringList tagCollapsed()
 inline void setTagCollapsed(const QStringList& collapsed)
 {
     setValueSync(kTagsCollapsed, collapsed);
+}
+
+inline bool proxyEnabled()
+{
+    return QSettings().value(QLatin1String(kProxyEnabled), false).toBool();
+}
+
+inline void setProxyEnabled(bool on)
+{
+    setValueSync(kProxyEnabled, on);
+}
+
+inline ProxyProtocol proxyProtocol()
+{
+    const int raw = QSettings().value(QLatin1String(kProxyProtocol),
+                                      int(ProxyProtocol::Socks5)).toInt();
+    if (raw >= int(ProxyProtocol::Http) && raw <= int(ProxyProtocol::Socks5)) {
+        return static_cast<ProxyProtocol>(raw);
+    }
+    return ProxyProtocol::Socks5;
+}
+
+inline void setProxyProtocol(ProxyProtocol protocol)
+{
+    setValueSync(kProxyProtocol, int(protocol));
+}
+
+inline QString proxyHost()
+{
+    return QSettings().value(QLatin1String(kProxyHost), QString()).toString();
+}
+
+inline void setProxyHost(const QString& host)
+{
+    setValueSync(kProxyHost, host.trimmed());
+}
+
+inline int proxyPort()
+{
+    return qBound(1, QSettings().value(QLatin1String(kProxyPort), 8080).toInt(), 65535);
+}
+
+inline void setProxyPort(int port)
+{
+    setValueSync(kProxyPort, qBound(1, port, 65535));
+}
+
+inline bool proxyAuthEnabled()
+{
+    return QSettings().value(QLatin1String(kProxyAuthEnabled), false).toBool();
+}
+
+inline void setProxyAuthEnabled(bool on)
+{
+    setValueSync(kProxyAuthEnabled, on);
+}
+
+inline QString proxyUsername()
+{
+    return QSettings().value(QLatin1String(kProxyUsername), QString()).toString();
+}
+
+inline void setProxyUsername(const QString& user)
+{
+    setValueSync(kProxyUsername, user.trimmed());
 }
 
 } // namespace AppSettings
