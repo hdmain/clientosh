@@ -282,7 +282,7 @@ jobs:
             archlinux/archlinux:base-devel \
           bash -e <<'EOF'
             pacman -Sy --noconfirm --needed \
-              qt6-base qt6-svg libssh openssl cmake ninja pkgconf
+              qt6-base qt6-svg libssh openssl freerdp cmake ninja pkgconf
             useradd -m builder
             chown -R builder:builder /work/packaging/arch
             runuser -u builder -- makepkg -sf --noconfirm
