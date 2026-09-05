@@ -111,6 +111,10 @@ private:
     void showHostContextMenu(const QPoint& globalPos, const QString& profileId);
     void showPageContextMenu(const QPoint& globalPos);
     void showTagContextMenu(const QPoint& globalPos, const QString& tagName);
+    void testAllHosts();
+    void recordHostReachability(const QString& profileId, bool reachable);
+    void applyHostReachabilityColors();
+    void finishHostReachabilityTest();
     void addTagDialog();
     void renameTagDialog(const QString& tagName);
     void deleteTag(const QString& tagName);
@@ -399,6 +403,9 @@ private:
     QStringList m_tags;
     QHash<QString, QStringList> m_tagAssignments; // tagName → profile IDs
     QStringList m_tagCollapsed;                   // stable keys of collapsed host folders
+    QHash<QString, bool> m_hostReachability;      // profileId → last reachability test
+    int m_hostReachabilityPending = 0;
+    bool m_hostReachabilityRunning = false;
     QString m_editingId;
     QString m_deferredSyncKey;
     QString m_deferredSyncToken;

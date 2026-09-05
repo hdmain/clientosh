@@ -75,6 +75,7 @@
 #include <QStyledItemDelegate>
 #include <QStyle>
 #include <QTableWidget>
+#include <QTcpSocket>
 #include <QTextCursor>
 #include <QTextEdit>
 #include <QTextList>
@@ -4375,6 +4376,7 @@ void DashboardPage::rebuildSavedList()
     }
 
     applySavedFilter();
+    applyHostReachabilityColors();
 }
 
 void DashboardPage::applySavedFilter()
@@ -4658,7 +4660,143 @@ void DashboardPage::showPageContextMenu(const QPoint& globalPos)
     menu.setObjectName(QStringLiteral("dashContextMenu"));
     auto* addTag = menu.addAction(QStringLiteral("Add Tag"));
     connect(addTag, &QAction::triggered, this, [this]() { addTagDialog(); });
+    menu.addSeparator();
+    auto* testAll = menu.addAction(QStringLiteral("Test all"));
+    testAll->setEnabled(!m_hostReachabilityRunning && !m_profiles.isEmpty());
+    connect(testAll, &QAction::triggered, this, [this]() { testAllHosts(); });
     menu.exec(globalPos);
+}
+
+void DashboardPage::testAllHosts()
+{
+    if (m_hostReachabilityRunning) {
+        m_hint->setText(QStringLiteral("host test already running"));
+        return;
+    }
+    if (m_profiles.isEmpty()) {
+        m_hint->setText(QStringLiteral("no hosts to test"));
+        return;
+    }
+
+    m_hostReachability.clear();
+    m_hostReachabilityRunning = true;
+    m_hostReachabilityPending = 0;
+    applyHostReachabilityColors();
+
+    constexpr int kTimeoutMs = 3000;
+    const QStringList serialPorts = SerialSession::availablePorts();
+
+    for (const SessionProfile& profile : m_profiles) {
+        if (profile.isSerial()) {
+            const bool ok = serialPorts.contains(profile.host, Qt::CaseInsensitive);
+            m_hostReachability.insert(profile.id, ok);
+            continue;
+        }
+
+        const QString host = profile.host.trimmed();
+        const int port = profile.port;
+        if (host.isEmpty() || port <= 0 || port > 65535) {
+            m_hostReachability.insert(profile.id, false);
+            continue;
+        }
+
+        ++m_hostReachabilityPending;
+        auto* socket = new QTcpSocket(this);
+        const QString profileId = profile.id;
+
+        const auto finishProbe = [this, socket, profileId](bool reachable) {
+            if (socket->property("hostProbeDone").toBool()) {
+                return;
+            }
+            socket->setProperty("hostProbeDone", true);
+            socket->abort();
+            recordHostReachability(profileId, reachable);
+            socket->deleteLater();
+        };
+
+        connect(socket, &QTcpSocket::connected, this, [finishProbe]() {
+            finishProbe(true);
+        });
+        connect(socket, &QAbstractSocket::errorOccurred, this,
+                [finishProbe](QAbstractSocket::SocketError) {
+                    finishProbe(false);
+                });
+        QTimer::singleShot(kTimeoutMs, socket, [finishProbe]() {
+            finishProbe(false);
+        });
+
+        socket->connectToHost(host, static_cast<quint16>(port));
+    }
+
+    applyHostReachabilityColors();
+    if (m_hostReachabilityPending == 0) {
+        finishHostReachabilityTest();
+    } else {
+        m_hint->setText(QStringLiteral("testing %1 hosts…").arg(m_profiles.size()));
+    }
+}
+
+void DashboardPage::recordHostReachability(const QString& profileId, bool reachable)
+{
+    m_hostReachability.insert(profileId, reachable);
+    applyHostReachabilityColors();
+
+    if (!m_hostReachabilityRunning) {
+        return;
+    }
+
+    --m_hostReachabilityPending;
+    if (m_hostReachabilityPending <= 0) {
+        finishHostReachabilityTest();
+        return;
+    }
+
+    const int done = m_hostReachability.size();
+    m_hint->setText(QStringLiteral("testing hosts… %1/%2").arg(done).arg(m_profiles.size()));
+}
+
+void DashboardPage::applyHostReachabilityColors()
+{
+    if (!m_savedTree) {
+        return;
+    }
+
+    const QColor okColor(0x3d, 0xa6, 0x5a);
+    const QColor failColor(0xc0, 0x3d, 0x3d);
+
+    for (int i = 0; i < m_savedTree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* header = m_savedTree->topLevelItem(i);
+        for (int c = 0; c < header->childCount(); ++c) {
+            QTreeWidgetItem* child = header->child(c);
+            if (child->data(0, Qt::UserRole + 1).toString() == QLatin1String("live")) {
+                continue;
+            }
+            const QString id = child->data(0, Qt::UserRole).toString();
+            if (!m_hostReachability.contains(id)) {
+                child->setData(0, Qt::ForegroundRole, QVariant());
+                continue;
+            }
+            child->setForeground(0, m_hostReachability.value(id) ? okColor : failColor);
+        }
+    }
+}
+
+void DashboardPage::finishHostReachabilityTest()
+{
+    m_hostReachabilityRunning = false;
+    m_hostReachabilityPending = 0;
+    applyHostReachabilityColors();
+
+    int ok = 0;
+    int fail = 0;
+    for (auto it = m_hostReachability.constBegin(); it != m_hostReachability.constEnd(); ++it) {
+        if (it.value()) {
+            ++ok;
+        } else {
+            ++fail;
+        }
+    }
+    m_hint->setText(QStringLiteral("host test done — %1 up, %2 down").arg(ok).arg(fail));
 }
 
 void DashboardPage::showTagContextMenu(const QPoint& globalPos, const QString& tagName)
