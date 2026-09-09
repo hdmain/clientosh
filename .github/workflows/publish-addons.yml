@@ -37,7 +37,8 @@ jobs:
             build_dir: build-win
             msys2: true
           - name: linux
-            os: ubuntu-22.04
+            # Ubuntu 24.04 ships freerdp3-dev required by the embedded RDP client.
+            os: ubuntu-24.04
             shell: bash
             build_dir: build-linux
           - name: macos
@@ -57,13 +58,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y qt6-base-dev libqt6svg6-dev libssh-dev libssl-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
+            libgl1-mesa-dev libegl1-mesa-dev freerdp3-dev
 
       - name: Install deps (macOS)
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install qt libssh openssl@3
+          brew install qt libssh openssl@3 freerdp
 
       - name: Install MSYS2
         if: runner.os == 'Windows'
@@ -78,6 +79,7 @@ jobs:
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-libssh
             mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-freerdp
             mingw-w64-x86_64-python
 
       - name: Install pinned Qt 6.9.2 (Windows)
