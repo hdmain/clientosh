@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "updated": "2026-09-01",
+  "updated": "2026-09-09",
   "notes": "Official clientosh addon catalog. Artifact ABI must match clientoshAddonAbi() (qtX.Y-win64-mingw / qtX.Y-linux-x64 / qtX.Y-macos).",
   "addons": [
     {
@@ -14,7 +14,7 @@
         {
           "abi": "qt6.11-macos",
           "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.11-macos/ai_agent.dylib",
-          "sha256": "78007c3937d623a78cb703a648b727220dd0d3a0717fa0dcbdeda23f93f72f48",
+          "sha256": "b6706b30ae520ce7c597a4423ce4d8d653dd7b98bbf303b8d764008cd67f7ab7",
           "size": 223504
         },
         {
@@ -24,9 +24,15 @@
           "size": 250192
         },
         {
+          "abi": "qt6.4-linux-x64",
+          "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.4-linux-x64/ai_agent.so",
+          "sha256": "72a91b7a3147f02987e3b6b1314d8f113d57fb533d5ef0883b0b7854c2ba39d9",
+          "size": 243200
+        },
+        {
           "abi": "qt6.9-win64-mingw",
           "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.9-win64-mingw/ai_agent.dll",
-          "sha256": "5c320f0e7bed9322871d616879f148765044b7c5831df1ae086dc6bb97067b43",
+          "sha256": "a62d882be971a27e24a4149b4bb4003d6b493824cd8eb49dfd30aadfedb7e060",
           "size": 294544
         }
       ]
