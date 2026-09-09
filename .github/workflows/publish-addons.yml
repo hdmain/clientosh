@@ -152,7 +152,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download all platform plugins
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: _addon_artifacts
           pattern: addon-ai-agent-*
