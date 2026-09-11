@@ -3076,6 +3076,10 @@ void DashboardPage::setNavPage(NavPage page)
     if (m_currentNav == NavPage::Notes && page != NavPage::Notes) {
         flushNotesToVault(true);
     }
+    if (m_currentNav == NavPage::Form && page != NavPage::Form) {
+        ui::resetPasswordReveal(m_passEdit);
+        ui::resetPasswordReveal(m_keyPassEdit);
+    }
     m_currentNav = page;
     switch (page) {
     case NavPage::Hosts:
@@ -3198,6 +3202,7 @@ void DashboardPage::clearForm()
     if (m_serialFlowCombo) m_serialFlowCombo->setCurrentText(QStringLiteral("none"));
     if (m_rdpDomainEdit) m_rdpDomainEdit->clear();
     m_passEdit->clear();
+    ui::resetPasswordReveal(m_passEdit);
     m_savePass->setChecked(AppSettings::savePasswordDefault());
     m_keyPathEdit->clear();
     reloadKeyringCombo();
@@ -3206,6 +3211,7 @@ void DashboardPage::clearForm()
     }
     onKeyringSelectionChanged(m_keyringCombo->currentIndex());
     m_keyPassEdit->clear();
+    ui::resetPasswordReveal(m_keyPassEdit);
     m_saveKeyPass->setChecked(false);
     if (m_authMethodCombo) {
         const int authIdx = m_authMethodCombo->findData(AppSettings::lastAuthMethod());
@@ -3232,6 +3238,7 @@ void DashboardPage::loadProfileIntoForm(const SessionProfile& profile)
     if (m_serialStopBitsCombo) m_serialStopBitsCombo->setCurrentText(QString::number(profile.serialStopBits));
     if (m_serialFlowCombo) m_serialFlowCombo->setCurrentText(profile.serialFlowControl);
     m_passEdit->setText(profile.password);
+    ui::resetPasswordReveal(m_passEdit);
     m_savePass->setChecked(profile.savePassword);
     m_keyPathEdit->setText(profile.privateKeyPath);
     reloadKeyringCombo();
@@ -3250,6 +3257,7 @@ void DashboardPage::loadProfileIntoForm(const SessionProfile& profile)
     }
     onKeyringSelectionChanged(m_keyringCombo->currentIndex());
     m_keyPassEdit->setText(profile.keyPassphrase);
+    ui::resetPasswordReveal(m_keyPassEdit);
     m_saveKeyPass->setChecked(profile.saveKeyPassphrase);
     if (m_authMethodCombo) {
         const int authIdx = m_authMethodCombo->findData(authMethod);

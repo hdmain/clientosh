@@ -195,6 +195,7 @@ private:
     bool m_mouseUtf8 = false;   // DECSET 1005
     bool m_altScroll = true;    // DECSET 1007 — default on (xterm alternateScroll)
     bool m_focusReport = false; // DECSET 1004
+    bool m_bracketedPaste = false; // DECSET 2004
     int m_mousePressedBtn = -1; // last pressed button code (0/1/2), -1 if none
     QPoint m_lastMouseCell{-1, -1};
     char32_t m_lastChar = U' ';

@@ -560,6 +560,7 @@ void TerminalWidget::resetTerminalState()
     m_mouseUtf8 = false;
     m_altScroll = true; // restore resource default, not off
     m_focusReport = false;
+    m_bracketedPaste = false;
     m_mousePressedBtn = -1;
     m_lastMouseCell = QPoint(-1, -1);
     updateQtMouseTracking();
@@ -1471,6 +1472,8 @@ void TerminalWidget::handleCsi(char finalByte, const QByteArray& paramsRaw)
                     m_altScroll = set;
                 } else if (mode == 1015) {
                     m_mouseUrxvt = set;
+                } else if (mode == 2004) {
+                    m_bracketedPaste = set;
                 }
             }
         }
@@ -2008,15 +2011,29 @@ void TerminalWidget::pasteClipboard()
         return;
     }
 
-    // Raw-mode TUIs (nano, vim, less) expect the Enter key to arrive as a
-    // carriage return (\r), not a line feed (\n). Normalize every newline in
-    // the pasted text to \r so multi-line paste lands correctly regardless of
-    // whether the clipboard uses LF, CRLF, or bare CR.
     QByteArray data = text.toUtf8();
-    data.replace("\r\n", "\r");
-    data.replace('\n', '\r');
 
-    emit inputReady(data);
+    // When the host enables DECSET 2004 (bash/readline do by default), wrap the
+    // paste so the shell receives the whole block before any line executes.
+    // Without this, trailing lines sit in the TTY buffer and get eaten as stdin
+    // by the first command (classic "apt update swallows the next paste line").
+    if (m_bracketedPaste) {
+        data.replace("\r\n", "\n");
+        data.replace('\r', '\n');
+        // A literal end-sequence inside the clipboard would terminate paste early.
+        data.replace("\033[201~", QByteArray());
+        QByteArray wrapped;
+        wrapped.reserve(data.size() + 12);
+        wrapped += "\033[200~";
+        wrapped += data;
+        wrapped += "\033[201~";
+        emit inputReady(wrapped);
+    } else {
+        // Raw-mode TUIs (nano, vim, less) expect Enter as \r, not \n.
+        data.replace("\r\n", "\r");
+        data.replace('\n', '\r');
+        emit inputReady(data);
+    }
     // On paste, clear any active selection.
     clearSelection();
 }
