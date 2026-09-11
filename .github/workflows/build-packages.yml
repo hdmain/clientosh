@@ -99,6 +99,10 @@ jobs:
 
       - name: Copy runtime DLLs
         run: |
+          # Deploy Qt plugins/DLLs first, then overlay MSYS2 deps. windeployqt ships
+          # Qt MinGW's older libwinpthread which lacks clock_gettime64 required by
+          # current FFmpeg avutil (FreeRDP). MSYS2 copies must win last.
+          "$QT_BIN_DIR/windeployqt" --no-translations --release build-win/clientosh.exe
           ntldd -R build-win/clientosh.exe \
             | sed 's/\\/\//g' \
             | grep -oiE '[^ ]+mingw64/bin/[^ ]+\.dll' \
@@ -106,10 +110,22 @@ jobs:
             | sort -u \
             | while read -r dll; do
                 if [ -f "$dll" ]; then
-                  cp "$dll" build-win/
+                  cp -f "$dll" build-win/
                 fi
               done
-          "$QT_BIN_DIR/windeployqt" --no-translations --release build-win/clientosh.exe
+          for dll in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
+            cp -f "/mingw64/bin/$dll" build-win/
+          done
+          # Guard: avutil must not ship with a pthread that lacks clock_gettime64.
+          avutil=$(ls build-win/avutil-*.dll 2>/dev/null | head -1 || true)
+          if [ -n "$avutil" ] \
+            && objdump -p "$avutil" 2>/dev/null | grep -q 'clock_gettime64'; then
+            if ! objdump -p build-win/libwinpthread-1.dll 2>/dev/null \
+              | grep -q 'clock_gettime64'; then
+              echo "ERROR: bundled libwinpthread-1.dll lacks clock_gettime64 needed by $avutil" >&2
+              exit 1
+            fi
+          fi
 
       - name: Build and normalize Windows packages
         run: |

@@ -635,6 +635,21 @@ if(WIN32)
             VERBATIM
         )
     endif()
+
+    # windeployqt may overwrite MinGW runtime with Qt's older libwinpthread, which
+    # lacks clock_gettime64 required by MSYS2 FFmpeg (avutil). Force MSYS2 copies last.
+    if(LIBSSH_ROOT)
+        foreach(_dll IN LISTS _gcc_dlls)
+            set(_msys_rt "${LIBSSH_ROOT}/bin/${_dll}")
+            if(EXISTS "${_msys_rt}")
+                add_custom_command(TARGET clientosh POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_msys_rt}" "$<TARGET_FILE_DIR:clientosh>"
+                    VERBATIM
+                )
+            endif()
+        endforeach()
+    endif()
 elseif(APPLE)
     set_target_properties(clientosh PROPERTIES
         MACOSX_BUNDLE FALSE

@@ -49,7 +49,6 @@ if(_copied EQUAL 0)
         libfreerdp3.dll libfreerdp-client3.dll libwinpr3.dll
         libfreerdp2.dll libfreerdp-client2.dll libwinpr2.dll
         liburiparser-1.dll libcjson-1.dll
-        avutil-60.dll avcodec-62.dll swscale-9.dll swresample-6.dll
         zlib1.dll libusb-1.0.dll
         libcrypto-3-x64.dll libssl-3-x64.dll
         libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll
@@ -60,6 +59,18 @@ if(_copied EQUAL 0)
             file(COPY "${_src}" DESTINATION "${DEST_DIR}")
             math(EXPR _copied "${_copied} + 1")
         endif()
+    endforeach()
+    # FFmpeg SONAMEs move across MSYS2 updates (avutil-60 → avutil-61, …).
+    file(GLOB _ffmpeg_dlls
+        "${FREERDP_BIN_DIR}/avutil-*.dll"
+        "${FREERDP_BIN_DIR}/avcodec-*.dll"
+        "${FREERDP_BIN_DIR}/swscale-*.dll"
+        "${FREERDP_BIN_DIR}/swresample-*.dll"
+        "${FREERDP_BIN_DIR}/avformat-*.dll"
+    )
+    foreach(_src IN LISTS _ffmpeg_dlls)
+        file(COPY "${_src}" DESTINATION "${DEST_DIR}")
+        math(EXPR _copied "${_copied} + 1")
     endforeach()
 endif()
 
