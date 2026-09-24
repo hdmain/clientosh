@@ -7,14 +7,14 @@
       "id": "ai-agent",
       "name": "AI agent",
       "description": "OpenAI-compatible terminal agent with streaming think, multi-step shell tools, Markdown chat, and auto-run for read-only commands. Loads only while installed and enabled.",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "author": "clientosh",
       "homepage": "https://github.com/hdmain/clientosh",
       "artifacts": [
         {
           "abi": "qt6.11-macos",
           "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.11-macos/ai_agent.dylib",
-          "sha256": "97e48ec9d68ed64d9551698853d9d82135773eeff5a8abc704bf9f33db719a26",
+          "sha256": "a35cbf515c47efc9e00f21cd6ab99c8d60db5240798095ee70595fb2cd2228f5",
           "size": 223504
         },
         {
@@ -26,13 +26,13 @@
         {
           "abi": "qt6.4-linux-x64",
           "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.4-linux-x64/ai_agent.so",
-          "sha256": "95057bfde08cfdeec72b566aee8a0a9b9be0b75b0f546a9e5ecde31e62cf3311",
+          "sha256": "835d61cbceca45f03b7b4aec2c6348064b1f5716391bdbb8602faeb3f38bc7af",
           "size": 243200
         },
         {
           "abi": "qt6.9-win64-mingw",
           "url": "https://raw.githubusercontent.com/hdmain/clientosh/main/addons/packages/ai-agent/qt6.9-win64-mingw/ai_agent.dll",
-          "sha256": "fa04e3213f67acc3aa698c882c2dca019599439afd0ca7852ddbc50129f71147",
+          "sha256": "6e42179ddb6d218e0b912dffcdf32e1d1dd541ee8d00d96193de9225842cfc0d",
           "size": 294544
         }
       ]
