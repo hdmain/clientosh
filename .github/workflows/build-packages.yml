@@ -48,17 +48,18 @@ jobs:
       - name: Install MSYS2 dependencies
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          # FreeRDP is only packaged for UCRT64/clang* (no mingw64 binary).
+          msystem: UCRT64
           update: true
           install: >-
             git
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-libssh
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-freerdp
-            mingw-w64-x86_64-ntldd
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-libssh
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-freerdp
+            mingw-w64-ucrt-x86_64-ntldd
 
       - name: Install pinned Qt 6.9.2 and MinGW 13.1
         shell: pwsh
@@ -105,8 +106,8 @@ jobs:
           "$QT_BIN_DIR/windeployqt" --no-translations --release build-win/clientosh.exe
           ntldd -R build-win/clientosh.exe \
             | sed 's/\\/\//g' \
-            | grep -oiE '[^ ]+mingw64/bin/[^ ]+\.dll' \
-            | sed -E 's#^.*mingw64/bin/#/mingw64/bin/#' \
+            | grep -oiE '[^ ]+ucrt64/bin/[^ ]+\.dll' \
+            | sed -E 's#^.*ucrt64/bin/#/ucrt64/bin/#' \
             | sort -u \
             | while read -r dll; do
                 if [ -f "$dll" ]; then
@@ -114,7 +115,7 @@ jobs:
                 fi
               done
           for dll in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
-            cp -f "/mingw64/bin/$dll" build-win/
+            cp -f "/ucrt64/bin/$dll" build-win/
           done
           # Guard: avutil must not ship with a pthread that lacks clock_gettime64.
           avutil=$(ls build-win/avutil-*.dll 2>/dev/null | head -1 || true)

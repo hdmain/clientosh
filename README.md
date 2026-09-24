@@ -199,9 +199,11 @@ flowchart TB
 <summary><b>🪟 Windows - MSYS2 (MinGW / UCRT64)</b></summary>
 
 ```bash
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake \
-  mingw-w64-x86_64-qt6-base mingw-w64-x86_64-qt6-svg \
-  mingw-w64-x86_64-libssh mingw-w64-x86_64-openssl mingw-w64-x86_64-freerdp
+# Use the UCRT64 shell — FreeRDP is not packaged for mingw64 anymore.
+pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-qt6-base mingw-w64-ucrt-x86_64-qt6-svg \
+  mingw-w64-ucrt-x86_64-libssh mingw-w64-ucrt-x86_64-openssl \
+  mingw-w64-ucrt-x86_64-freerdp
 ```
 
 Or build against an existing pinned Qt install (see *Windows build* below).

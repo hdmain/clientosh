@@ -27,11 +27,11 @@ jobs:
             os: macos-latest
             cmake_args: -G "Unix Makefiles"
             build_dir: build-macos
-          - name: Windows (MSYS2 MinGW)
+          - name: Windows (MSYS2 UCRT64)
             os: windows-latest
             shell: msys2 {0}
             build_dir: build-win
-            msys2: MINGW64
+            msys2: UCRT64
 
     defaults:
       run:
@@ -62,13 +62,13 @@ jobs:
           install: >-
             git
             ninja
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-qt6-base
-            mingw-w64-x86_64-qt6-svg
-            mingw-w64-x86_64-libssh
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-freerdp
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-svg
+            mingw-w64-ucrt-x86_64-libssh
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-freerdp
 
       - name: Configure
         run: |

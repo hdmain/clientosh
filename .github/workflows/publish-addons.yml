@@ -70,17 +70,17 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           install: >-
             git
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-libssh
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-freerdp
-            mingw-w64-x86_64-python
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-libssh
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-freerdp
+            mingw-w64-ucrt-x86_64-python
 
       - name: Install pinned Qt 6.9.2 (Windows)
         if: runner.os == 'Windows'

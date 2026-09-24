@@ -244,7 +244,7 @@ endif()
 if(CLIENTOSH_FREERDP_INCLUDE_DIRS STREQUAL "" OR NOT FREERDP_CLIENT_LIBRARY OR NOT FREERDP_LIBRARY OR NOT WINPR_LIBRARY)
     message(FATAL_ERROR
         "FreeRDP development libraries not found.\n"
-        "  Windows (MSYS2): pacman -S mingw-w64-x86_64-freerdp\n"
+        "  Windows (MSYS2): pacman -S mingw-w64-ucrt-x86_64-freerdp\n"
         "  Debian/Ubuntu:   apt install freerdp3-dev  # Ubuntu 24.04+\n"
         "                     apt install freerdp2-dev  # older releases (limited)\n"
         "  Fedora:          dnf install freerdp-devel\n"
