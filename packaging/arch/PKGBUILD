@@ -4,7 +4,7 @@
 # together with each release.
 
 pkgname=clientosh
-pkgver=1.0.8
+pkgver=1.0.9
 pkgrel=1
 _clientosh_build_channel=stable
 _clientosh_build_number=0

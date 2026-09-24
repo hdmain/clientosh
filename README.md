@@ -193,7 +193,7 @@ Go to **[github.com/hdmain/clientosh/releases](https://github.com/hdmain/cliento
 
 | Channel | What it is | Where |
 |---|---|---|
-| **Stable** (recommended) | Tagged release (`v1.0.8`, …) marked **Latest** | Top of the [Releases](https://github.com/hdmain/clientosh/releases) page |
+| **Stable** (recommended) | Tagged release (`v1.0.9`, …) marked **Latest** | Top of the [Releases](https://github.com/hdmain/clientosh/releases) page |
 | **Beta** | Rolling build from `main`, replaced on every successful push | [releases/tag/beta](https://github.com/hdmain/clientosh/releases/tag/beta) |
 
 ### 2. Download the file for your OS
@@ -211,7 +211,7 @@ On the release page, expand **Assets** and pick one file:
 | **Linux** (portable) | `clientosh-*-linux-x86_64.tar.gz` | Extract and run `usr/bin/clientosh` |
 | **macOS** | `clientosh-*-macos.dmg` | Open the DMG and drag **clientosh** to Applications |
 
-`*` is either a version like `v1.0.8` (stable) or `beta` (rolling). Each release also ships `CHECKSUMS*.txt` if you want to verify downloads.
+`*` is either a version like `v1.0.9` (stable) or `beta` (rolling). Each release also ships `CHECKSUMS*.txt` if you want to verify downloads.
 
 ### 3. Launch
 
@@ -338,7 +338,7 @@ cmake --build  --preset windows-qt692-mingw
 ./scripts/build-deb.sh
 sudo apt install ./build-deb/clientosh_*.deb
 
-# Beta package identity (About: 1.0.8-beta.1)
+# Beta package identity (About: 1.0.9-beta.1)
 CLIENTOSH_BUILD_CHANNEL=beta CLIENTOSH_BUILD_NUMBER=1 ./scripts/build-deb.sh
 
 # Stable RPM
