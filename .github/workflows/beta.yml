@@ -17,7 +17,6 @@ jobs:
       cancel-in-progress: true
     uses: ./.github/workflows/build-packages.yml
     with:
-      source_ref: ${{ github.sha }}
       package_label: beta
       build_channel: beta
       build_number: ${{ github.run_number }}

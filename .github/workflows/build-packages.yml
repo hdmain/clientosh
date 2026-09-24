@@ -3,10 +3,6 @@ name: Build packages
 on:
   workflow_call:
     inputs:
-      source_ref:
-        description: Git ref or SHA to build
-        required: true
-        type: string
       package_label:
         description: Label used in artifact filenames (for example beta or v1.0.8)
         required: true
@@ -22,6 +18,7 @@ on:
         default: "0"
         type: string
 
+# Checkout uses the caller's trusted github.sha/ref (no caller-supplied source_ref).
 permissions:
   contents: read
 
@@ -38,8 +35,6 @@ jobs:
       BUILD_NUMBER: ${{ inputs.build_number }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_ref }}
 
       - name: Install Inno Setup
         shell: pwsh
@@ -154,8 +149,6 @@ jobs:
       BUILD_NUMBER: ${{ inputs.build_number }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_ref }}
 
       - name: Install dependencies
         run: |
@@ -270,8 +263,6 @@ jobs:
       BUILD_NUMBER: ${{ inputs.build_number }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_ref }}
 
       - name: Prepare source package from selected commit
         run: |
@@ -337,8 +328,6 @@ jobs:
       BUILD_NUMBER: ${{ inputs.build_number }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_ref }}
 
       - name: Install dependencies
         run: |

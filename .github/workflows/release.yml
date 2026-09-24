@@ -4,12 +4,9 @@ on:
   push:
     tags:
       - "v*"
+  # Manual rebuild: choose the v* tag from the "Use workflow from" dropdown
+  # (trusted github.ref) — do not pass an arbitrary tag string input.
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing v* tag to build and publish
-        required: true
-        type: string
 
 permissions:
   actions: read
@@ -20,8 +17,7 @@ jobs:
     name: Build all release packages
     uses: ./.github/workflows/build-packages.yml
     with:
-      source_ref: ${{ inputs.tag || github.ref }}
-      package_label: ${{ inputs.tag || github.ref_name }}
+      package_label: ${{ github.ref_name }}
       build_channel: stable
       build_number: "0"
 
@@ -30,11 +26,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.tag || github.ref }}
 
       - name: Download all packages
         uses: actions/download-artifact@v8

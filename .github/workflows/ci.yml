@@ -10,6 +10,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: checkout + build + upload artifacts.
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   build:
     name: ${{ matrix.name }}
