@@ -9,6 +9,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QColor>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QHBoxLayout>
@@ -43,21 +44,54 @@ QString formatBytesCompact(qint64 bytes)
     if (bytes < 0) {
         return QStringLiteral("—");
     }
-    const double gib = double(bytes) / (1024.0 * 1024.0 * 1024.0);
-    if (gib >= 10.0) {
-        return QStringLiteral("%1G").arg(gib, 0, 'f', 0);
+    const double tib = double(bytes) / (1024.0 * 1024.0 * 1024.0 * 1024.0);
+    if (tib >= 1.0) {
+        return QStringLiteral("%1TB").arg(tib, 0, 'f', tib >= 10.0 ? 0 : 1);
     }
+    const double gib = double(bytes) / (1024.0 * 1024.0 * 1024.0);
     if (gib >= 1.0) {
-        return QStringLiteral("%1G").arg(gib, 0, 'f', 1);
+        return QStringLiteral("%1GB").arg(gib, 0, 'f', gib >= 10.0 ? 0 : 1);
     }
     const double mib = double(bytes) / (1024.0 * 1024.0);
-    if (mib >= 10.0) {
-        return QStringLiteral("%1M").arg(mib, 0, 'f', 0);
-    }
     if (mib >= 1.0) {
-        return QStringLiteral("%1M").arg(mib, 0, 'f', 1);
+        return QStringLiteral("%1MB").arg(mib, 0, 'f', mib >= 10.0 ? 0 : 1);
     }
-    return QStringLiteral("%1K").arg(bytes / 1024);
+    const double kib = double(bytes) / 1024.0;
+    if (kib >= 1.0) {
+        return QStringLiteral("%1KB").arg(kib, 0, 'f', kib >= 10.0 ? 0 : 1);
+    }
+    return QStringLiteral("%1B").arg(bytes);
+}
+
+/** used/total with one shared unit based on the larger value (e.g. 12GB/20GB). */
+QString formatBytesPair(qint64 used, qint64 total)
+{
+    if (used < 0 || total < 0) {
+        return QStringLiteral("—");
+    }
+    const qint64 ref = qMax(used, total);
+    double divisor = 1.0;
+    QString suffix = QStringLiteral("B");
+    if (ref >= 1024LL * 1024 * 1024 * 1024) {
+        divisor = 1024.0 * 1024.0 * 1024.0 * 1024.0;
+        suffix = QStringLiteral("TB");
+    } else if (ref >= 1024LL * 1024 * 1024) {
+        divisor = 1024.0 * 1024.0 * 1024.0;
+        suffix = QStringLiteral("GB");
+    } else if (ref >= 1024LL * 1024) {
+        divisor = 1024.0 * 1024.0;
+        suffix = QStringLiteral("MB");
+    } else if (ref >= 1024LL) {
+        divisor = 1024.0;
+        suffix = QStringLiteral("KB");
+    }
+
+    auto fmt = [&](qint64 bytes) {
+        const double v = double(bytes) / divisor;
+        const int decimals = (v >= 10.0 || suffix == QLatin1String("B")) ? 0 : 1;
+        return QStringLiteral("%1%2").arg(v, 0, 'f', decimals).arg(suffix);
+    };
+    return QStringLiteral("%1/%2").arg(fmt(used), fmt(total));
 }
 
 QString formatPercent(double value)
@@ -66,6 +100,17 @@ QString formatPercent(double value)
         return QStringLiteral("—");
     }
     return QStringLiteral("%1%").arg(qRound(value));
+}
+
+/** Smooth yellow→red from 80% upward (80 = yellow, 100 = red). */
+QColor cpuHeatColor(double percent)
+{
+    const double t = qBound(0.0, (percent - 80.0) / 20.0, 1.0);
+    const QColor yellow(0xe6, 0xc2, 0x00);
+    const QColor red(0xe8, 0x3b, 0x3b);
+    return QColor(qRound(yellow.red() + t * (red.red() - yellow.red())),
+                  qRound(yellow.green() + t * (red.green() - yellow.green())),
+                  qRound(yellow.blue() + t * (red.blue() - yellow.blue())));
 }
 }
 
@@ -238,6 +283,7 @@ void TopNavBar::clearStatsDisplay()
 {
     m_statsHaveData = false;
     m_statsText.clear();
+    m_statsHtml.clear();
     m_stats->clear();
     m_stats->setToolTip(QString());
     m_stats->setVisible(false);
@@ -247,6 +293,7 @@ void TopNavBar::hideStatsUntilData()
 {
     m_statsHaveData = false;
     m_statsText.clear();
+    m_statsHtml.clear();
     m_stats->clear();
     m_stats->setToolTip(QString());
     m_stats->setVisible(false);
@@ -265,20 +312,25 @@ void TopNavBar::applyStats(const ServerStats& stats)
         return;
     }
 
-    QString cpu = formatPercent(stats.cpuPercent);
+    const QString cpu = formatPercent(stats.cpuPercent);
     QString ram = QStringLiteral("—");
     if (stats.memTotalBytes > 0 && stats.memUsedBytes >= 0) {
-        ram = QStringLiteral("%1/%2")
-                  .arg(formatBytesCompact(stats.memUsedBytes), formatBytesCompact(stats.memTotalBytes));
+        ram = formatBytesPair(stats.memUsedBytes, stats.memTotalBytes);
     }
 
     QString disk = QStringLiteral("—");
     if (stats.diskTotalBytes > 0 && stats.diskUsedBytes >= 0) {
-        const double pct = 100.0 * double(stats.diskUsedBytes) / double(stats.diskTotalBytes);
-        disk = formatPercent(pct);
+        disk = formatBytesPair(stats.diskUsedBytes, stats.diskTotalBytes);
     }
 
     m_statsText = QStringLiteral("cpu %1  ·  ram %2  ·  disk %3").arg(cpu, ram, disk);
+    if (stats.cpuPercent >= 80.0) {
+        const QColor heat = cpuHeatColor(stats.cpuPercent);
+        m_statsHtml = QStringLiteral("cpu <span style=\"color:%1\">%2</span>  ·  ram %3  ·  disk %4")
+                          .arg(heat.name(QColor::HexRgb), cpu, ram, disk);
+    } else {
+        m_statsHtml.clear();
+    }
 
     QString tip;
     if (stats.cpuPercent >= 0.0) {
@@ -304,8 +356,9 @@ void TopNavBar::updateStatsPresentation()
         return;
     }
 
+    const QString& shown = m_statsHtml.isEmpty() ? m_statsText : m_statsHtml;
     const bool compact = shouldCompactStats();
-    if (compact == m_statsCompact && ((!compact && m_stats->text() == m_statsText)
+    if (compact == m_statsCompact && ((!compact && m_stats->text() == shown)
                                       || (compact && !m_stats->pixmap(Qt::ReturnByValue).isNull()))) {
         return;
     }
@@ -313,10 +366,12 @@ void TopNavBar::updateStatsPresentation()
     m_statsCompact = compact;
     if (compact) {
         m_stats->setText(QString());
+        m_stats->setTextFormat(Qt::PlainText);
         m_stats->setPixmap(QIcon(QStringLiteral(":/icons/server-stats.svg")).pixmap(QSize(15, 15)));
     } else {
         m_stats->setPixmap(QPixmap());
-        m_stats->setText(m_statsText);
+        m_stats->setTextFormat(m_statsHtml.isEmpty() ? Qt::PlainText : Qt::RichText);
+        m_stats->setText(shown);
     }
 }
 

@@ -75,7 +75,8 @@ private:
     QToolButton* m_sftpBtn = nullptr;
     QToolButton* m_xmodemBtn = nullptr;
     QLabel* m_stats = nullptr;
-    QString m_statsText;
+    QString m_statsText;   // plain text (layout / width)
+    QString m_statsHtml;   // rich text when CPU is tinted; empty → use plain
     bool m_statsHaveData = false;
     bool m_statsCompact = false;
     bool m_workspaceActive = false;
