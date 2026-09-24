@@ -185,6 +185,63 @@ flowchart TB
 
 ## 🚀 &nbsp;Quick Start & Installation
 
+You do **not** need to build from source. Grab a ready package from GitHub Releases.
+
+### 1. Open Releases
+
+Go to **[github.com/hdmain/clientosh/releases](https://github.com/hdmain/clientosh/releases)**.
+
+| Channel | What it is | Where |
+|---|---|---|
+| **Stable** (recommended) | Tagged release (`v1.0.8`, …) marked **Latest** | Top of the [Releases](https://github.com/hdmain/clientosh/releases) page |
+| **Beta** | Rolling build from `main`, replaced on every successful push | [releases/tag/beta](https://github.com/hdmain/clientosh/releases/tag/beta) |
+
+### 2. Download the file for your OS
+
+On the release page, expand **Assets** and pick one file:
+
+| Platform | File to download | How to install |
+|---|---|---|
+| **Windows** | `clientosh-*-win64-setup.exe` | Run the installer (default: `C:\Program Files\clientosh`) |
+| **Windows** (no install) | `clientosh-*-win64-portable.zip` | Unzip anywhere and run `clientosh.exe` |
+| **Debian / Ubuntu** | `clientosh-*-amd64.deb` | `sudo apt install ./clientosh-*-amd64.deb` |
+| **Fedora / RHEL / openSUSE** | `clientosh-*-x86_64.rpm` | `sudo rpm -i clientosh-*-x86_64.rpm` (or `dnf install ./…`) |
+| **Arch Linux** | `clientosh-*-x86_64.pkg.tar.zst` | `sudo pacman -U clientosh-*-x86_64.pkg.tar.zst` |
+| **Linux** (any) | `clientosh-*-x86_64.AppImage` | `chmod +x` then run the AppImage |
+| **Linux** (portable) | `clientosh-*-linux-x86_64.tar.gz` | Extract and run `usr/bin/clientosh` |
+| **macOS** | `clientosh-*-macos.dmg` | Open the DMG and drag **clientosh** to Applications |
+
+`*` is either a version like `v1.0.8` (stable) or `beta` (rolling). Each release also ships `CHECKSUMS*.txt` if you want to verify downloads.
+
+### 3. Launch
+
+After install, start **clientosh** from the Start menu / Applications / desktop, or run `clientosh` from a terminal. With no arguments you get the dashboard; see [Usage](#-usage--examples) for CLI connect shortcuts.
+
+<details>
+<summary><b>Direct beta download links</b> (always point at the latest rolling build)</summary>
+
+| Platform | Download |
+|---|---|
+| **Windows** installer | [clientosh-beta-win64-setup.exe](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-win64-setup.exe) |
+| **Windows** portable | [clientosh-beta-win64-portable.zip](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-win64-portable.zip) |
+| **Debian / Ubuntu** | [clientosh-beta-amd64.deb](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-amd64.deb) |
+| **Fedora / RHEL / openSUSE** | [clientosh-beta-x86_64.rpm](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-x86_64.rpm) |
+| **AppImage** | [clientosh-beta-x86_64.AppImage](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-x86_64.AppImage) |
+| **Linux** tarball | [clientosh-beta-linux-x86_64.tar.gz](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-linux-x86_64.tar.gz) |
+| **Arch** | [clientosh-beta-x86_64.pkg.tar.zst](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-x86_64.pkg.tar.zst) |
+| **macOS** | [clientosh-beta-macos.dmg](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-macos.dmg) |
+| **Checksums** | [CHECKSUMS-beta.txt](https://github.com/hdmain/clientosh/releases/download/beta/CHECKSUMS-beta.txt) |
+
+</details>
+
+<br/>
+
+---
+
+## 🛠️ &nbsp;Build from source
+
+For contributors and local development only. End users should use [Releases](#-quick-start--installation) above.
+
 ### Requirements
 
 - CMake **≥ 3.21**
@@ -192,21 +249,22 @@ flowchart TB
 - Qt **6** (`Widgets`, `Network`, `Svg`)
 - **libssh** 2.x
 - OpenSSL **3** (for the encrypted vault)
+- **FreeRDP** (embedded RDP)
 
 ### Install dependencies
 
 <details>
-<summary><b>🪟 Windows - MSYS2 (MinGW / UCRT64)</b></summary>
+<summary><b>🪟 Windows - MSYS2 (MinGW64)</b></summary>
 
 ```bash
-# Use the UCRT64 shell — FreeRDP is not packaged for mingw64 anymore.
-pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake \
-  mingw-w64-ucrt-x86_64-qt6-base mingw-w64-ucrt-x86_64-qt6-svg \
-  mingw-w64-ucrt-x86_64-libssh mingw-w64-ucrt-x86_64-openssl \
-  mingw-w64-ucrt-x86_64-freerdp
+# MINGW64 shell — matches the Windows release CI / CMake preset layout.
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake \
+  mingw-w64-x86_64-qt6-base mingw-w64-x86_64-qt6-svg \
+  mingw-w64-x86_64-libssh mingw-w64-x86_64-openssl \
+  mingw-w64-x86_64-freerdp
 ```
 
-Or build against an existing pinned Qt install (see *Windows build* below).
+Or build against a pinned Qt install with the CMake preset below.
 </details>
 
 <details>
@@ -236,7 +294,7 @@ brew install cmake qt libssh openssl@3 freerdp pkg-config
 
 ### Building
 
-> ⚠️ **Important:** use a **separate build directory per platform**. Reusing a Windows `build/` from WSL (or the reverse) fails because CMake caches generators and paths differ.
+> ⚠️ Use a **separate build directory per platform**. Reusing a Windows `build/` from WSL (or the reverse) fails because CMake caches generators and paths differ.
 
 **Linux / WSL / macOS**
 
@@ -246,59 +304,48 @@ cmake --build build-linux -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu || echo 4)
 ./build-linux/clientosh
 ```
 
-An ordinary source build reports `<version>-dev`. Official rolling beta and
-stable builds set the channel in CI; to reproduce a beta identity locally use:
+An ordinary source build reports `<version>-dev`. To reproduce a beta identity locally:
 
 ```bash
 cmake -S . -B build-beta -DCLIENTOSH_BUILD_CHANNEL=beta -DCLIENTOSH_BUILD_NUMBER=1
 ```
 
-If CMake cannot find Qt, point it at the Qt6 include tree:
+If CMake cannot find Qt:
 
 ```bash
-cmake -S . -B build-linux -DCMAKE_PREFIX_PATH=/usr   # Debian/Ubuntu (usually /usr)
-# or, for a manual Qt build:
+cmake -S . -B build-linux -DCMAKE_PREFIX_PATH=/usr   # Debian/Ubuntu
+# or a manual Qt kit:
 cmake -S . -B build-linux -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64
 ```
 
-**🪟 Windows - Qt + MinGW (pinned Qt 6.9.2)** - the recommended path is the CMake preset, which pins the build to **exactly Qt 6.9.2** plus its matching **MinGW 13.1.0** toolchain and libssh/OpenSSL from MSYS2 - the same set the release CI uses, so the app renders and behaves identically to the released build.
+**🪟 Windows - Qt + MinGW (pinned Qt 6.9.2)** — same toolchain the release CI uses:
 
 ```powershell
-cmake --preset windows-qt692-mingw   # Qt 6.9.2 + MinGW 13.1, outputs to build-win/
+cmake --preset windows-qt692-mingw   # Qt 6.9.2 + MinGW 13.1 → build-win/
 cmake --build  --preset windows-qt692-mingw
 .\build-win\clientosh.exe
 
-# Optional: repackage the installer after a rebuild
+# Optional: rebuild the Inno Setup installer
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" build-win\installer\clientosh_installer.iss
 ```
 
-> 💡 Build from a shell where the Qt toolchain `bin` is on `PATH`
-> (`C:/Qt/Tools/mingw1310_64/bin`); the preset injects it automatically. The Windows build also runs `windeployqt --release` and copies the runtime DLLs (libssh, OpenSSL, MinGW) so the exe is **self-contained**.
+> 💡 Keep the Qt toolchain `bin` on `PATH` (`C:/Qt/Tools/mingw1310_64/bin`); the preset injects it. After build, `windeployqt` plus MSYS2 runtime DLLs (libssh, OpenSSL, FreeRDP/FFmpeg, MinGW) are copied so the exe is self-contained.
 
-### Install the packaged release
-
-| Platform | Artifacts |
-|---|---|
-| **Linux** | `.deb`, `.rpm`, `.AppImage`, portable `.tar.gz` |
-| **Windows** | Inno Setup `.exe`, portable `.zip` |
-| **Arch** | `.pkg.tar.zst` |
-| **macOS** | `.dmg` |
+### Package locally
 
 ```bash
-# Linux - .deb
+# Linux .deb
 ./scripts/build-deb.sh
 sudo apt install ./build-deb/clientosh_*.deb
 
-# Reproduce a beta package (About: 1.0.8-beta.1)
+# Beta package identity (About: 1.0.8-beta.1)
 CLIENTOSH_BUILD_CHANNEL=beta CLIENTOSH_BUILD_NUMBER=1 ./scripts/build-deb.sh
 
-# Build a stable RPM
+# Stable RPM
 CLIENTOSH_BUILD_CHANNEL=stable ./scripts/build-rpm.sh
 ```
 
-Both packaging scripts default to the `dev` channel. Supported values for
-`CLIENTOSH_BUILD_CHANNEL` are `dev`, `beta`, and `stable`; `beta` additionally
-requires a positive numeric `CLIENTOSH_BUILD_NUMBER`.
+`CLIENTOSH_BUILD_CHANNEL` may be `dev`, `beta`, or `stable`. `beta` also needs a positive `CLIENTOSH_BUILD_NUMBER`.
 
 <br/>
 
@@ -567,33 +614,6 @@ The **CI** workflow builds and smoke-tests the project on Ubuntu, macOS, and Win
 > 🔐 **Security note:** host-key checking is intentionally disabled to keep the local client raw and friction-free. Prefer running clientosh on **trusted networks** until key verification (the top roadmap item) lands.
 
 > 💡 **Pro tip:** bump the numeric product version once in `project(VERSION ...)`. CMake then adds the selected build channel consistently to About, Windows resources, installers, and Linux package metadata.
-
-<br/>
-
----
-
-## ⬇️ &nbsp;Download beta versions
-
-Pre-release builds from the latest commit on `main`. The [beta release](https://github.com/hdmain/clientosh/releases/tag/beta) is updated automatically on every push.
-
-| Platform | Download |
-|---|---|
-| **Windows** (64-bit installer) | [clientosh-beta-win64-setup.exe](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-win64-setup.exe) |
-| **Windows** (64-bit portable) | [clientosh-beta-win64-portable.zip](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-win64-portable.zip) |
-| **Linux** (Debian / Ubuntu `.deb`) | [clientosh-beta-amd64.deb](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-amd64.deb) |
-| **Linux** (Fedora / RHEL / openSUSE `.rpm`) | [clientosh-beta-x86_64.rpm](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-x86_64.rpm) |
-| **Linux** (`.AppImage`) | [clientosh-beta-x86_64.AppImage](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-x86_64.AppImage) |
-| **Linux** (portable `.tar.gz`) | [clientosh-beta-linux-x86_64.tar.gz](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-linux-x86_64.tar.gz) |
-| **Arch Linux** (`.pkg.tar.zst`) | [clientosh-beta-x86_64.pkg.tar.zst](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-x86_64.pkg.tar.zst) |
-| **macOS** (`.dmg`) | [clientosh-beta-macos.dmg](https://github.com/hdmain/clientosh/releases/download/beta/clientosh-beta-macos.dmg) |
-| **Checksums** | [CHECKSUMS-beta.txt](https://github.com/hdmain/clientosh/releases/download/beta/CHECKSUMS-beta.txt) |
-
-```bash
-# Linux
-sudo apt install ./clientosh-beta-amd64.deb
-```
-
-For stable, tagged releases see [Releases](https://github.com/hdmain/clientosh/releases).
 
 <br/>
 
